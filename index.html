@@ -3,105 +3,125 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Walkie-Talkie Pro POC</title>
+    <title>Walkie-Talkie POC | V3</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         :root { --bg: #0a0a0a; --panel: #161616; --accent: #2ecc71; --error: #e74c3c; --text: #ecf0f1; }
-        body { font-family: 'Courier New', monospace; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; }
-        header { background: #000; padding: 10px; text-align: center; border-bottom: 2px solid var(--accent); font-weight: bold; }
-        #user-bar { background: #222; font-size: 0.7em; padding: 8px; text-align: center; color: var(--accent); }
-        #chat-window { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 8px; }
-        .msg { background: var(--panel); padding: 8px; border-radius: 4px; border-left: 3px solid var(--accent); font-size: 0.9em; max-width: 80%; }
+        body { font-family: 'Courier New', monospace; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        header { background: #000; padding: 12px; text-align: center; border-bottom: 2px solid var(--accent); font-weight: bold; letter-spacing: 2px; }
+        #user-bar { background: #1a1a1a; font-size: 0.75em; padding: 8px; text-align: center; color: var(--accent); border-bottom: 1px solid #333; }
+        #chat-window { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 8px; background-color: #0d0d0d; }
+        .msg { background: var(--panel); padding: 8px 12px; border-radius: 4px; border-left: 3px solid var(--accent); font-size: 0.9em; align-self: flex-start; max-width: 85%; }
         .controls { background: #000; padding: 20px; display: flex; flex-direction: column; gap: 15px; align-items: center; border-top: 1px solid #333; }
         .input-group { width: 100%; display: flex; gap: 10px; }
-        input { flex: 1; padding: 12px; border-radius: 4px; border: 1px solid #333; background: #111; color: white; }
+        input { flex: 1; padding: 12px; border-radius: 4px; border: 1px solid #333; background: #111; color: white; font-size: 16px; }
         #talk-btn { 
             width: 100px; height: 100px; border-radius: 50%; border: 5px solid #333; 
             background: var(--error); color: white; font-weight: bold; cursor: pointer;
-            box-shadow: 0 4px 0 #962d22; touch-action: none;
+            box-shadow: 0 6px 0 #962d22; touch-action: none; transition: all 0.1s;
         }
         #talk-btn:active { transform: translateY(4px); box-shadow: none; background: #c0392b; }
-        .status-label { font-size: 0.7em; letter-spacing: 2px; color: #666; }
+        #talk-btn.transmitting { border-color: var(--accent); box-shadow: 0 0 20px rgba(46, 204, 113, 0.4); }
+        .status-label { font-size: 0.7em; letter-spacing: 1px; color: #777; font-weight: bold; }
+        .warning { color: #f1c40f !important; }
     </style>
 </head>
 <body>
 
-    <header>SISTEMA DE RADIO P2P</header>
-    <div id="user-bar">CONECTANDO...</div>
+    <header>SISTEMA RADIO POC</header>
+    <div id="user-bar">ESTADO: DESCONECTADO</div>
 
-    <div id="chat-window"></div>
+    <div id="chat-window">
+        <div class="msg"><b>SISTEMA:</b> Toca cualquier parte para activar el receptor de audio.</div>
+    </div>
 
     <div class="controls">
         <div class="input-group">
-            <input type="text" id="chat-input" placeholder="Escribe mensaje...">
-            <button onclick="sendMessage()" style="background:var(--accent); border:none; padding:0 15px; border-radius:4px; font-weight:bold;">></button>
+            <input type="text" id="chat-input" placeholder="Mensaje...">
+            <button onclick="sendMessage()" style="background:var(--accent); border:none; padding:0 20px; border-radius:4px; font-weight:bold; cursor:pointer;">ENVIAR</button>
         </div>
         
         <button id="talk-btn">TALK</button>
-        <div id="status" class="status-label">ESPERANDO INTERACCIÓN</div>
+        <div id="status" class="status-label">ESPERANDO INICIO</div>
     </div>
 
     <script>
-        // --- CONFIGURACIÓN ---
+        // --- 1. CONFIGURACIÓN DE CONEXIÓN (IMPORTANTE) ---
+        // Sustituye con tu URL actual de Cloudflare
         const SERVER_URL = "https://heads-actively-blocks-rack.trycloudflare.com"; 
-        const socket = io(SERVER_URL);
+
+        const socket = io(SERVER_URL, {
+            transports: ['websocket'], // Forzamos WebSocket para evitar error CORS/530
+            upgrade: false,
+            reconnectionAttempts: 10
+        });
 
         let audioCtx;
         let mediaRecorder;
         const statusEl = document.getElementById('status');
         const userBar = document.getElementById('user-bar');
+        const chatWindow = document.getElementById('chat-window');
+        const talkBtn = document.getElementById('talk-btn');
 
-        // 1. DESBLOQUEAR AUDIO (Crítico para móviles)
-        function unlockAudio() {
+        // --- 2. DESBLOQUEO DE AUDIO ---
+        async function initAudio() {
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             }
             if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
+                await audioCtx.resume();
             }
             statusEl.innerText = "RADIO LISTA";
             statusEl.style.color = "var(--accent)";
+            userBar.classList.remove('warning');
         }
 
-        document.addEventListener('click', unlockAudio, { once: true });
-        document.addEventListener('touchstart', unlockAudio, { once: true });
+        // Activación por interacción
+        document.addEventListener('click', initAudio, { once: true });
+        document.addEventListener('touchstart', initAudio, { once: true });
 
-        // 2. GESTIÓN DE USUARIOS Y CHAT
+        // --- 3. EVENTOS DE SOCKET ---
+        socket.on('connect', () => {
+            userBar.innerText = "CONECTADO AL SERVIDOR";
+            console.log("Conectado con ID:", socket.id);
+        });
+
         socket.on('user-list', (list) => {
             userBar.innerText = `EN LÍNEA (${list.length}): ${list.join(', ')}`;
         });
 
-        function sendMessage() {
-            const input = document.getElementById('chat-input');
-            if(input.value) {
-                socket.emit('chat-message', input.value);
-                input.value = '';
-                unlockAudio();
-            }
-        }
-
         socket.on('chat-message', (data) => {
-            const win = document.getElementById('chat-window');
-            win.innerHTML += `<div class="msg"><b>${data.id}:</b> ${data.text}</div>`;
-            win.scrollTop = win.scrollHeight;
+            const div = document.createElement('div');
+            div.className = 'msg';
+            div.innerHTML = `<b>${data.id}:</b> ${data.text}`;
+            chatWindow.appendChild(div);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
         });
 
-        // 3. EMISIÓN DE VOZ
+        socket.on('connect_error', (err) => {
+            userBar.innerText = "ERROR DE CONEXIÓN (CORS/URL)";
+            userBar.classList.add('warning');
+            console.error("Error socket:", err);
+        });
+
+        // --- 4. EMISIÓN (MICRÓFONO) ---
         navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
             mediaRecorder = new MediaRecorder(stream);
             
             mediaRecorder.ondataavailable = (e) => {
-                if (e.data.size > 0) socket.emit('audio-chunk', e.data);
+                if (e.data.size > 0) {
+                    // Enviamos el audio como Blob/Buffer
+                    socket.emit('audio-chunk', e.data);
+                }
             };
 
-            const btn = document.getElementById('talk-btn');
-            
             const startRec = (e) => {
                 if(e.cancelable) e.preventDefault();
-                unlockAudio();
+                initAudio();
                 if(mediaRecorder.state === "inactive") {
-                    mediaRecorder.start(500);
+                    mediaRecorder.start(400); // Fragmentos de 400ms
                     statusEl.innerText = "TRANSMITIENDO...";
+                    talkBtn.classList.add('transmitting');
                 }
             };
 
@@ -109,28 +129,45 @@
                 if(mediaRecorder.state === "recording") {
                     mediaRecorder.stop();
                     statusEl.innerText = "RADIO LISTA";
+                    talkBtn.classList.remove('transmitting');
                 }
             };
 
-            btn.onmousedown = startRec; btn.onmouseup = stopRec;
-            btn.ontouchstart = startRec; btn.ontouchend = stopRec;
+            talkBtn.onmousedown = startRec; talkBtn.onmouseup = stopRec;
+            talkBtn.ontouchstart = startRec; talkBtn.ontouchend = stopRec;
+        }).catch(err => {
+            userBar.innerText = "MICRÓFONO NO DISPONIBLE";
+            userBar.classList.add('warning');
         });
 
-        // 4. RECEPCIÓN DE VOZ (AudioContext Streaming)
+        // --- 5. RECEPCIÓN (ALTAVOZ) ---
         socket.on('audio-stream', async (arrayBuffer) => {
-            if (!audioCtx || audioCtx.state === 'suspended') return;
+            if (!audioCtx || audioCtx.state === 'suspended') {
+                userBar.innerText = "⚠️ TOCA LA PANTALLA PARA OÍR";
+                userBar.classList.add('warning');
+                return;
+            }
 
             try {
-                // Decodificamos el binario y lo reproducimos inmediatamente
+                // Decodificación directa en el flujo de AudioContext
                 const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
                 const source = audioCtx.createBufferSource();
                 source.buffer = audioBuffer;
                 source.connect(audioCtx.destination);
                 source.start(0);
             } catch (err) {
-                console.error("Error de decodificación", err);
+                console.error("Error decodificando audio", err);
             }
         });
+
+        function sendMessage() {
+            const input = document.getElementById('chat-input');
+            if(input.value.trim()) {
+                socket.emit('chat-message', input.value);
+                input.value = '';
+                initAudio();
+            }
+        }
     </script>
 </body>
 </html>
