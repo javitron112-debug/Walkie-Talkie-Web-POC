@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Walkie-Talkie POC</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        :root { --bg: #121212; --panel: #1e1e1e; --accent: #00e676; --text: #e0e0e0; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        
+        header { background: #000; padding: 15px; text-align: center; border-bottom: 2px solid var(--accent); }
+        
+        #chat-window { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
+        .msg { background: var(--panel); padding: 10px; border-radius: 8px; max-width: 80%; border-left: 3px solid var(--accent); }
+        .msg b { color: var(--accent); font-size: 0.8em; display: block; }
+        .msg small { float: right; color: #888; font-size: 0.7em; margin-top: 5px; }
+
+        .controls { background: var(--panel); padding: 20px; display: flex; flex-direction: column; gap: 15px; align-items: center; border-top: 1px solid #333; }
+        
+        .chat-input-group { width: 100%; display: flex; gap: 10px; }
+        input { flex: 1; padding: 12px; border-radius: 25px; border: none; background: #333; color: white; outline: none; }
+        
+        #talk-btn { 
+            width: 100px; height: 100px; border-radius: 50%; border: none; 
+            background: #ff5252; color: white; font-weight: bold; 
+            box-shadow: 0 0 15px rgba(255, 82, 82, 0.5);
+            touch-action: none; cursor: pointer; transition: 0.2s;
+        }
+        #talk-btn:active { background: #b71c1c; transform: scale(0.9); box-shadow: 0 0 5px rgba(255, 82, 82, 0.8); }
+        #status { font-size: 0.8em; text-transform: uppercase; letter-spacing: 1px; }
+    </style>
+</head>
+<body>
+
+    <header>WALKIE-TALKIE V1.0</header>
+
+    <div id="chat-window">
+        <div class="msg"><b>Sistema</b> Bienvenido al canal. Pulsa TALK para transmitir.</div>
+    </div>
+
+    <div class="controls">
+        <div class="chat-input-group">
+            <input type="text" id="chat-input" placeholder="Escribe un mensaje...">
+            <button onclick="sendMessage()" style="background:none; border:none; color:var(--accent); font-weight:bold;">ENVIAR</button>
+        </div>
+        
+        <button id="talk-btn">TALK</button>
+        <div id="status">EN ESPERA</div>
+    </div>
+
+    <script>
+        // --- CONFIGURACIÓN ---
+        const SERVER_URL = "https://loading-author-experiences-frank.trycloudflare.com"; 
+        const socket = io(SERVER_URL);
+        
+        let mediaRecorder;
+        const statusEl = document.getElementById('status');
+        const chatWindow = document.getElementById('chat-window');
+
+        // --- AUDIO ---
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+            // Usamos formato audio/webm que es nativo y ligero
+            mediaRecorder = new MediaRecorder(stream);
+            
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) socket.emit('audio-chunk', e.data);
+            };
+
+            const btn = document.getElementById('talk-btn');
+
+            const startTransmitting = (e) => {
+                if(e.cancelable) e.preventDefault();
+                if (mediaRecorder.state === "inactive") {
+                    mediaRecorder.start(500); // Enviamos chunks cada 500ms para menor latencia
+                    statusEl.innerText = "• TRANSMITIENDO";
+                    statusEl.style.color = "#ff5252";
+                }
+            };
+
+            const stopTransmitting = () => {
+                if (mediaRecorder.state === "recording") {
+                    mediaRecorder.stop();
+                    statusEl.innerText = "EN ESPERA";
+                    statusEl.style.color = "var(--text)";
+                }
+            };
+
+            // Eventos para PC y Móvil
+            btn.addEventListener('mousedown', startTransmitting);
+            btn.addEventListener('mouseup', stopTransmitting);
+            btn.addEventListener('touchstart', startTransmitting);
+            btn.addEventListener('touchend', stopTransmitting);
+        }).catch(err => {
+            alert("Error al acceder al micrófono. Asegúrate de usar HTTPS.");
+        });
+
+        // Recibir streaming de audio
+        socket.on('audio-stream', async (blobData) => {
+            const blob = new Blob([blobData], { type: 'audio/webm' });
+            const url = URL.createObjectURL(blob);
+            const audio = new Audio(url);
+            try {
+                await audio.play();
+            } catch (err) {
+                console.log("El navegador bloqueó el autoplay. Haz click en la pantalla.");
+            }
+        });
+
+        // --- CHAT ---
+        function sendMessage() {
+            const input = document.getElementById('chat-input');
+            if (input.value.trim()) {
+                socket.emit('chat-message', input.value);
+                input.value = '';
+            }
+        }
+
+        socket.on('chat-message', (data) => {
+            const div = document.createElement('div');
+            div.className = 'msg';
+            div.innerHTML = `<b>User-${data.id}</b> ${data.text} <small>${data.time}</small>`;
+            chatWindow.appendChild(div);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+        });
+
+        // Enviar con tecla Enter
+        document.getElementById('chat-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+    </script>
+</body>
+</html>
