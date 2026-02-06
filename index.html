@@ -3,102 +3,223 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Walkie-Talkie Terminal</title>
+    <title>Radio Pro Terminal</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        :root { --main: #00ff41; --dark: #0a0a0a; --panel: #161616; --red: #ff3131; }
-        body { font-family: 'Segoe UI', sans-serif; background: var(--dark); color: white; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        :root { 
+            --body-color: #2c3e50; 
+            --lcd-bg: #9ebc7d; 
+            --lcd-text: #2b3a1a; 
+            --accent: #f1c40f;
+            --ptt-red: #c0392b;
+        }
         
-        /* Overlay de Nombre */
-        #nick-overlay { position: fixed; inset: 0; background: var(--dark); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
-        .start-card { background: var(--panel); padding: 30px; border-radius: 15px; border: 1px solid var(--main); text-align: center; width: 80%; }
-        
-        header { padding: 15px; background: #000; border-bottom: 2px solid var(--main); display: flex; justify-content: space-between; align-items: center; font-weight: bold; }
-        #status-dot { width: 10px; height: 10px; background: #555; border-radius: 50%; display: inline-block; margin-right: 5px; }
-        .online-dot { background: var(--main) !important; box-shadow: 0 0 8px var(--main); }
+        body { 
+            font-family: 'Courier New', monospace; 
+            background: #1a1a1a; 
+            margin: 0; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            overflow: hidden; 
+        }
 
-        /* Chat */
-        #chat { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; background: #0d0d0d; }
-        .msg { background: var(--panel); padding: 10px; border-radius: 8px; border-left: 4px solid var(--main); max-width: 85%; align-self: flex-start; }
-        .msg b { color: var(--main); font-size: 0.8em; display: block; margin-bottom: 4px; }
+        /* Chasis del Walkie-Talkie */
+        .device-case {
+            width: 95%;
+            max-width: 400px;
+            height: 90vh;
+            background: var(--body-color);
+            border-radius: 40px 40px 60px 60px;
+            border: 8px solid #1a252f;
+            display: flex;
+            flex-direction: column;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.5), 10px 10px 30px rgba(0,0,0,0.8);
+            position: relative;
+        }
 
-        /* Visualizador */
-        .viz-box { height: 50px; width: 100%; background: #000; border-top: 1px solid #333; }
-        canvas { width: 100%; height: 100%; }
+        /* Pantalla LCD */
+        .lcd-screen {
+            background: var(--lcd-bg);
+            margin: 20px;
+            height: 250px;
+            border-radius: 10px;
+            border: 5px solid #1a1a1a;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.3);
+        }
+
+        .lcd-header {
+            padding: 5px 10px;
+            background: rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--lcd-text);
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+        }
+
+        #chat {
+            flex: 1;
+            padding: 10px;
+            overflow-y: auto;
+            color: var(--lcd-text);
+            font-size: 14px;
+            line-height: 1.2;
+        }
+
+        .msg { margin-bottom: 8px; border-bottom: 1px dotted rgba(0,0,0,0.2); }
+        .msg b { text-transform: uppercase; font-size: 11px; }
+
+        /* Visualizador Estilo Radio */
+        .viz-container {
+            height: 60px;
+            background: rgba(0,0,0,0.05);
+            position: relative;
+        }
+        canvas { width: 100%; height: 100%; opacity: 0.7; }
+
+        /* Rejilla Altavoz */
+        .speaker-grille {
+            height: 80px;
+            background-image: radial-gradient(#1a1a1a 2px, transparent 2px);
+            background-size: 8px 8px;
+            margin: 0 40px;
+            opacity: 0.4;
+        }
 
         /* Controles */
-        .controls { 
-            background: #000; 
-            padding: 15px; 
-            padding-bottom: 30px; /* Espacio extra para móviles */
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            gap: 12px; 
-            border-top: 1px solid #333; 
+        .controls {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            align-items: center;
         }
-        .input-row { display: flex; width: 100%; gap: 10px; }
-        input { flex: 1; padding: 12px; border-radius: 10px; border: 1px solid #444; background: #111; color: white; outline: none; font-size: 16px; }
-        
-        /* NUEVO BOTÓN TIPO BARRA */
-        #talk-btn { 
-            width: 100%; 
-            max-width: 400px;
-            height: 60px; 
-            border-radius: 10px; 
-            border: none; 
-            background: linear-gradient(to bottom, #ff4b2b, #ff3131);
-            color: white; 
-            font-weight: bold; 
-            font-size: 1.2em;
-            text-transform: uppercase;
-            cursor: pointer; 
-            transition: 0.1s;
-            box-shadow: 0 4px 0 #8b0000; 
+
+        .input-area {
+            display: flex;
+            width: 100%;
+            background: rgba(0,0,0,0.2);
+            border-radius: 20px;
+            padding: 5px;
+        }
+
+        input {
+            background: transparent;
+            border: none;
+            color: white;
+            padding: 10px;
+            flex: 1;
+            outline: none;
+            font-family: monospace;
+        }
+
+        .send-btn {
+            background: var(--accent);
+            border: none;
+            border-radius: 50%;
+            width: 35px;
+            height: 35px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        /* Botón PTT */
+        #talk-btn {
+            width: 85%;
+            height: 80px;
+            background: var(--ptt-red);
+            border: none;
+            border-radius: 15px;
+            color: white;
+            font-weight: bold;
+            font-size: 18px;
+            box-shadow: 0 6px 0 #8e271c;
+            cursor: pointer;
             touch-action: none;
-            -webkit-user-select: none;
+            margin-bottom: 20px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
         }
-        #talk-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #8b0000; background: #ff3131; }
-        #talk-btn.recording { filter: brightness(1.3); box-shadow: 0 0 15px var(--red); border: 2px solid white; }
+
+        #talk-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 2px 0 #8e271c;
+        }
+
+        #talk-btn.transmitting {
+            background: #e74c3c;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0px rgba(231, 76, 60, 0.7); }
+            100% { box-shadow: 0 0 0 20px rgba(231, 76, 60, 0); }
+        }
+
+        /* Nickname Overlay */
+        #nick-overlay {
+            position: fixed;
+            inset: 0;
+            background: #1a1a1a;
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .nick-card {
+            background: var(--body-color);
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            border: 4px solid var(--accent);
+        }
     </style>
 </head>
 <body>
 
     <div id="nick-overlay">
-        <div class="start-card">
-            <h2 style="color:var(--main)">IDENTIFICACIÓN</h2>
-            <input type="text" id="nick-input" placeholder="Tu Nickname..." style="width: 80%; margin-bottom: 20px;">
+        <div class="nick-card">
+            <h2 style="color: var(--accent)">FRECUENCIA PRIVADA</h2>
+            <input type="text" id="nick-input" placeholder="ID OPERADOR..." style="background:#000; border: 1px solid var(--accent); padding: 10px; width: 80%; margin-bottom: 20px;">
             <br>
-            <button onclick="startApp()" style="padding: 12px 40px; background:var(--main); border:none; border-radius:20px; font-weight:bold; cursor:pointer; color:black;">CONECTAR</button>
+            <button onclick="startApp()" style="padding: 10px 30px; background: var(--accent); border: none; font-weight: bold; cursor: pointer;">CONECTAR</button>
         </div>
     </div>
 
-    <header>
-        <span>POC TERMINAL</span>
-        <div><span id="status-dot"></span> <small id="status-text">OFFLINE</small></div>
-    </header>
-
-    <div id="chat"></div>
-
-    <div class="viz-box">
-        <canvas id="visualizer"></canvas>
-    </div>
-
-    <div class="controls">
-        <div class="input-row">
-            <input type="text" id="chat-input" placeholder="Mensaje...">
-            <button onclick="sendMsg()" style="background:var(--main); border:none; padding:10px 20px; border-radius:10px; font-weight:bold;">ENVIAR</button>
+    <div class="device-case">
+        <div class="lcd-screen">
+            <div class="lcd-header">
+                <span id="op-name">ID: ---</span>
+                <span id="status-text">SQL: OFF</span>
+            </div>
+            <div id="chat"></div>
+            <div class="viz-container">
+                <canvas id="visualizer"></canvas>
+            </div>
         </div>
-        <button id="talk-btn">PULSAR PARA HABLAR</button>
+
+        <div class="speaker-grille"></div>
+
+        <div class="controls">
+            <div class="input-area">
+                <input type="text" id="chat-input" placeholder="MENSAJE TX...">
+                <button class="send-btn" onclick="sendMsg()">></button>
+            </div>
+            <button id="talk-btn">PULSAR PARA HABLAR</button>
+            <div style="color: rgba(255,255,255,0.3); font-size: 10px;">MODEL: POC-TERMINAL V.9</div>
+        </div>
     </div>
 
     <script>
-        // URL ACTUALIZADA
+        // --- CAMBIO DE URL (IMPORTANTE) ---
         const SERVER_URL = "https://earlier-contracting-packages-furnishings.trycloudflare.com"; 
         
         const socket = io(SERVER_URL, {
-            transports: ['polling'], 
-            upgrade: false
+            transports: ['polling', 'websocket']
         });
 
         let audioCtx, analyser, dataArray;
@@ -109,10 +230,12 @@
             const nick = document.getElementById('nick-input').value;
             if(!nick) return;
             socket.emit('set-nickname', nick);
+            document.getElementById('op-name').innerText = "ID: " + nick.toUpperCase();
             document.getElementById('nick-overlay').style.display = 'none';
+            
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             analyser = audioCtx.createAnalyser();
-            analyser.fftSize = 256;
+            analyser.fftSize = 64;
             dataArray = new Uint8Array(analyser.frequencyBinCount);
             drawVisualizer();
         }
@@ -121,15 +244,15 @@
             requestAnimationFrame(drawVisualizer);
             if(!analyser) return;
             analyser.getByteFrequencyData(dataArray);
-            canvasCtx.fillStyle = 'black';
-            canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
-            const barWidth = (canvas.width / dataArray.length) * 2;
+            canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const barWidth = (canvas.width / dataArray.length);
             let x = 0;
             dataArray.forEach(v => {
                 const h = (v / 255) * canvas.height;
-                canvasCtx.fillStyle = `rgb(0, ${v + 100}, 65)`;
-                canvasCtx.fillRect(x, canvas.height - h, barWidth, h);
-                x += barWidth + 1;
+                canvasCtx.fillStyle = '#2b3a1a';
+                canvasCtx.fillRect(x, canvas.height - h, barWidth - 1, h);
+                x += barWidth;
             });
         }
 
@@ -143,13 +266,13 @@
 
         socket.on('chat-message', (data) => {
             const chat = document.getElementById('chat');
-            chat.innerHTML += `<div class="msg"><b>${data.user}</b>${data.text}</div>`;
+            chat.innerHTML += `<div class="msg"><b>[${data.user}]</b>: ${data.text}</div>`;
             chat.scrollTop = chat.scrollHeight;
         });
 
         socket.on('connect', () => {
-            document.getElementById('status-dot').classList.add('online-dot');
-            document.getElementById('status-text').innerText = "CONECTADO";
+            document.getElementById('status-text').innerText = "SQL: ON";
+            document.getElementById('status-text').style.color = "#2b3a1a";
         });
 
         socket.on('audio-stream', async (data) => {
@@ -175,21 +298,21 @@
                 };
                 recorder.onstop = () => { if(isRec) startLoop(); };
                 recorder.start();
-                setTimeout(() => { if(recorder && recorder.state === "recording") recorder.stop(); }, 800);
+                setTimeout(() => { if(recorder && recorder.state === "recording") recorder.stop(); }, 700);
             };
 
             const press = (e) => {
                 if(e.cancelable) e.preventDefault();
                 if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
                 isRec = true;
-                btn.classList.add('recording');
+                btn.classList.add('transmitting');
                 btn.innerText = "TRANSMITIENDO...";
                 startLoop();
             };
 
             const release = () => {
                 isRec = false;
-                btn.classList.remove('recording');
+                btn.classList.remove('transmitting');
                 btn.innerText = "PULSAR PARA HABLAR";
                 if(recorder) recorder.stop();
             };
