@@ -3,143 +3,123 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Walkie-Talkie POC | V-FINAL</title>
+    <title>Walkie-Talkie Streaming</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        :root { --bg: #0a0a0a; --accent: #00ff41; --error: #ff3131; }
-        body { font-family: 'Courier New', monospace; background: var(--bg); color: #fff; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        header { border-bottom: 2px solid var(--accent); padding: 10px; text-align: center; color: var(--accent); font-weight: bold; }
-        #chat { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 5px; font-size: 0.8em; }
-        .msg { border-left: 2px solid #333; padding-left: 8px; }
-        .controls { background: #111; padding: 20px; border-top: 2px solid #333; display: flex; flex-direction: column; align-items: center; gap: 15px; }
+        :root { --bg: #000; --accent: #00ff41; }
+        body { font-family: monospace; background: var(--bg); color: white; display: flex; flex-direction: column; height: 100vh; margin: 0; }
+        header { padding: 20px; border-bottom: 2px solid var(--accent); text-align: center; color: var(--accent); font-weight: bold; }
+        #status-bar { padding: 10px; font-size: 0.8em; text-align: center; background: #111; cursor: pointer; color: #ffeb3b; }
+        #chat { flex: 1; overflow-y: auto; padding: 20px; }
+        .msg { margin-bottom: 10px; border-left: 2px solid var(--accent); padding-left: 10px; }
+        .controls { padding: 30px; background: #0a0a0a; display: flex; flex-direction: column; align-items: center; gap: 20px; }
         #talk-btn { 
-            width: 100px; height: 100px; border-radius: 50%; border: none; 
-            background: var(--error); color: white; font-weight: bold;
-            box-shadow: 0 5px 0 #8b0000; touch-action: none; cursor: pointer;
+            width: 120px; height: 120px; border-radius: 50%; border: none; 
+            background: #ff3131; color: white; font-weight: bold; font-size: 1.2em;
+            box-shadow: 0 0 20px rgba(255,49,49,0.5); touch-action: none; cursor: pointer;
         }
-        #talk-btn:active { transform: translateY(4px); box-shadow: none; background: #c0392b; }
-        #status { font-size: 0.8em; font-weight: bold; color: #f1c40f; text-align: center; cursor: pointer; padding: 12px; border: 2px dashed #f1c40f; width: 85%; border-radius: 8px; }
-        .online { color: var(--accent) !important; border: 2px solid var(--accent) !important; animation: pulse 2s infinite; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        #talk-btn:active { transform: scale(0.95); background: #b00; }
+        .active { color: var(--accent) !important; font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <header>POC WALKIE-TALKIE V-FINAL</header>
+    <header>SISTEMA RADIO STREAMING</header>
+    <div id="status-bar" onclick="initAudio()">⚠️ PULSA AQUÍ PARA SINCRONIZAR RADIO</div>
+    
     <div id="chat"></div>
 
     <div class="controls">
-        <div id="status" onclick="startRadio()">⚠️ PULSA PARA ACTIVAR RADIO</div>
         <button id="talk-btn">TALK</button>
-        <div style="width: 100%; display: flex; gap: 5px;">
-            <input type="text" id="chat-input" placeholder="Chat...">
-            <button onclick="sendMessage()" style="background:var(--accent); border:none; padding: 10px; font-weight:bold;">OK</button>
-        </div>
+        <div id="radio-state">OFFLINE</div>
     </div>
 
     <script>
         const SERVER_URL = "https://ira-losses-adaptation-counters.trycloudflare.com"; 
         const socket = io(SERVER_URL, { transports: ['polling', 'websocket'] });
 
-        const chat = document.getElementById('chat');
-        const status = document.getElementById('status');
-        
-        // --- MOTOR DE AUDIO WEB AUDIO API ---
-        let audioCtx;
+        let mediaSource;
+        let sourceBuffer;
+        let queue = [];
+        let audio = new Audio();
+        const mimeType = 'audio/webm; codecs="opus"';
 
-        async function startRadio() {
-            if (audioCtx) return;
-            
-            try {
-                // 1. Creamos el contexto
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        // 1. Inicializar el flujo de audio (MSE)
+        function initAudio() {
+            if (mediaSource) return;
+
+            mediaSource = new MediaSource();
+            audio.src = URL.createObjectURL(mediaSource);
+
+            mediaSource.addEventListener('sourceopen', () => {
+                sourceBuffer = mediaSource.addSourceBuffer(mimeType);
+                sourceBuffer.mode = 'sequence'; // Clave para streaming: trata cada chunk como secuencial
                 
-                // 2. Desbloqueamos el estado 'suspended'
-                if (audioCtx.state === 'suspended') {
-                    await audioCtx.resume();
-                }
+                sourceBuffer.addEventListener('updateend', () => {
+                    if (queue.length > 0 && !sourceBuffer.updating) {
+                        sourceBuffer.appendBuffer(queue.shift());
+                    }
+                });
+            });
 
-                // 3. Kickstart: Reproducimos un micro-segundo de silencio generado
-                const oscillator = audioCtx.createOscillator();
-                const gainNode = audioCtx.createGain();
-                gainNode.gain.value = 0; // Silencio total
-                oscillator.connect(gainNode);
-                gainNode.connect(audioCtx.destination);
-                oscillator.start(0);
-                oscillator.stop(0.1);
-
-                status.innerText = "RADIO ONLINE - LISTA";
-                status.classList.add('online');
-                console.log("Audio Engine Ready");
-            } catch (e) {
-                console.error("No se pudo iniciar AudioContext", e);
-            }
+            audio.play().then(() => {
+                document.getElementById('status-bar').innerText = "✅ RADIO SINCRONIZADA";
+                document.getElementById('status-bar').classList.add('active');
+            }).catch(e => console.log("Interacción requerida"));
         }
 
         // --- RECEPCIÓN ---
-        socket.on('audio-stream', async (arrayBuffer) => {
-            if (!audioCtx || audioCtx.state !== 'running') return;
+        socket.on('audio-stream', (arrayBuffer) => {
+            if (!sourceBuffer) return;
 
-            try {
-                // Decodificamos el audio binario directamente
-                const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-                const source = audioCtx.createBufferSource();
-                source.buffer = audioBuffer;
-                source.connect(audioCtx.destination);
-                source.start(0);
-            } catch (err) {
-                // Si falla la decodificación por falta de cabecera, usamos el plan B:
-                playAsBlob(arrayBuffer);
+            if (sourceBuffer.updating || queue.length > 0) {
+                queue.push(arrayBuffer);
+            } else {
+                try {
+                    sourceBuffer.appendBuffer(arrayBuffer);
+                } catch (e) {
+                    console.error("Error al añadir al buffer:", e);
+                }
             }
         });
 
-        // Plan B: Reproducción mediante Blob para chunks con cabecera
-        function playAsBlob(data) {
-            const blob = new Blob([data], { type: 'audio/webm; codecs=opus' });
-            const url = URL.createObjectURL(blob);
-            const audio = new Audio(url);
-            audio.play().then(() => {
-                audio.onended = () => URL.revokeObjectURL(url);
-            }).catch(e => console.log("Blob playback also blocked"));
-        }
-
         socket.on('chat-message', (data) => {
+            const chat = document.getElementById('chat');
             chat.innerHTML += `<div class="msg"><b>${data.id}:</b> ${data.text}</div>`;
             chat.scrollTop = chat.scrollHeight;
         });
 
         // --- EMISIÓN ---
-        function sendMessage() {
-            const input = document.getElementById('chat-input');
-            if(input.value.trim()) {
-                socket.emit('chat-message', input.value);
-                input.value = '';
-                startRadio();
-            }
-        }
-
         navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-            const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm; codecs=opus' });
+            // Es vital que el MediaRecorder use el MISMO mimeType que el SourceBuffer
+            const mediaRecorder = new MediaRecorder(stream, { mimeType: mimeType });
 
             mediaRecorder.ondataavailable = (e) => {
-                if (e.data.size > 0) socket.emit('audio-chunk', e.data);
+                if (e.data.size > 0) {
+                    e.data.arrayBuffer().then(buffer => {
+                        socket.emit('audio-chunk', buffer);
+                    });
+                }
             };
 
             const btn = document.getElementById('talk-btn');
-            
+            const state = document.getElementById('radio-state');
+
             btn.onmousedown = btn.ontouchstart = (e) => {
                 if(e.cancelable) e.preventDefault();
-                startRadio();
+                initAudio();
                 if(mediaRecorder.state === 'inactive') {
-                    mediaRecorder.start(1000); // 1 segundo para asegurar cabeceras WebM
-                    status.innerText = "TRANSMITIENDO...";
+                    mediaRecorder.start(500); // Enviamos paquetes pequeños
+                    state.innerText = "TRANSMITIENDO...";
+                    state.style.color = "#ff3131";
                 }
             };
 
             btn.onmouseup = btn.ontouchend = () => {
                 if(mediaRecorder.state === 'recording') {
                     mediaRecorder.stop();
-                    status.innerText = "RADIO ONLINE - LISTA";
+                    state.innerText = "LISTO";
+                    state.style.color = "#00ff41";
                 }
             };
         });
