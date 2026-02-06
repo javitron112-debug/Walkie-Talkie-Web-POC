@@ -6,90 +6,142 @@
     <title>Walkie-Talkie POC | V5</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        :root { --bg: #050505; --accent: #00ff41; --error: #ff3131; }
-        body { font-family: 'Courier New', monospace; background: var(--bg); color: #fff; margin: 0; display: flex; flex-direction: column; height: 100vh; }
-        header { border-bottom: 2px solid var(--accent); padding: 10px; text-align: center; color: var(--accent); font-weight: bold; }
-        #chat { flex: 1; overflow-y: auto; padding: 15px; font-size: 0.9em; }
-        .msg { margin-bottom: 5px; border-left: 2px solid #333; padding-left: 8px; }
-        .controls { background: #111; padding: 20px; border-top: 2px solid #333; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+        :root { --bg: #050505; --accent: #00ff41; --error: #ff3131; --panel: #1a1a1a; }
+        body { font-family: 'Courier New', monospace; background: var(--bg); color: #fff; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        
+        header { border-bottom: 2px solid var(--accent); padding: 12px; text-align: center; color: var(--accent); font-weight: bold; text-transform: uppercase; letter-spacing: 2px; }
+        #user-bar { background: #111; font-size: 0.7em; padding: 5px; text-align: center; color: #888; border-bottom: 1px solid #333; }
+        
+        #chat { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 8px; }
+        .msg { background: var(--panel); padding: 8px; border-radius: 4px; border-left: 3px solid var(--accent); align-self: flex-start; max-width: 85%; font-size: 0.9em; }
+        
+        .controls { background: #000; padding: 20px; border-top: 2px solid #333; display: flex; flex-direction: column; align-items: center; gap: 15px; }
+        .input-group { width: 100%; display: flex; gap: 10px; }
+        input { flex: 1; padding: 12px; background: #000; color: #fff; border: 1px solid #444; border-radius: 4px; outline: none; }
+        
         #talk-btn { 
-            width: 80px; height: 80px; border-radius: 50%; border: none; 
+            width: 90px; height: 90px; border-radius: 50%; border: none; 
             background: var(--error); color: white; font-weight: bold;
-            box-shadow: 0 4px 0 #8b0000; touch-action: none; cursor: pointer;
+            box-shadow: 0 5px 0 #8b0000; touch-action: none; cursor: pointer; transition: 0.1s;
         }
-        #talk-btn:active { transform: translateY(4px); box-shadow: none; }
-        #status { font-size: 0.7em; color: var(--accent); }
+        #talk-btn:active { transform: translateY(4px); box-shadow: none; background: #c0392b; }
+        #status { font-size: 0.8em; font-weight: bold; color: var(--accent); }
+        .warning { color: #f1c40f !important; }
     </style>
 </head>
 <body>
 
-<header>SISTEMA DE COMUNICACIÓN POC</header>
-<div id="chat"></div>
+    <header>RADIO TERMINAL POC</header>
+    <div id="user-bar">ESTADO: CONECTANDO...</div>
+    <div id="chat"></div>
 
-<div class="controls">
-    <input type="text" id="chat-input" placeholder="Escribe aquí..." style="width: 80%; padding: 8px; background: #000; color: #fff; border: 1px solid #444;">
-    <button id="talk-btn">TALK</button>
-    <div id="status">RADIO EN ESPERA</div>
-</div>
-
-<script>
-    const SERVER_URL = "https://watched-boxing-mark-connector.trycloudflare.com"; 
-    const socket = io(SERVER_URL, { transports: ['polling', 'websocket'] });
-
-    const chat = document.getElementById('chat');
-    const status = document.getElementById('status');
-
-    // Desbloqueo de audio obligatorio
-    let audioEnabled = false;
-    document.addEventListener('click', () => audioEnabled = true, { once: true });
-
-    // --- RECEPCIÓN ---
-    socket.on('audio-stream', (data) => {
-        if (!audioEnabled) return;
-
-        // Convertimos el Buffer a Blob con el tipo correcto
-        const blob = new Blob([data], { type: 'audio/webm; codecs=opus' });
-        const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-
-        audio.play().catch(e => console.log("Audio blocked by browser"));
+    <div class="controls">
+        <div class="input-group">
+            <input type="text" id="chat-input" placeholder="Escribe un mensaje...">
+            <button onclick="sendMessage()" style="background:var(--accent); border:none; padding:0 15px; font-weight:bold; cursor:pointer;">OK</button>
+        </div>
         
-        // Liberar memoria
-        audio.onended = () => URL.revokeObjectURL(url);
-    });
+        <button id="talk-btn">TALK</button>
+        <div id="status">RADIO EN ESPERA</div>
+    </div>
 
-    socket.on('chat-message', (data) => {
-        chat.innerHTML += `<div class="msg"><b>${data.id}:</b> ${data.text}</div>`;
-        chat.scrollTop = chat.scrollHeight;
-    });
+    <script>
+        // --- CONFIGURACIÓN ---
+        const SERVER_URL = "https://ira-losses-adaptation-counters.trycloudflare.com"; 
+        const socket = io(SERVER_URL, { transports: ['polling', 'websocket'] });
 
-    // --- EMISIÓN ---
-    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-        const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm; codecs=opus' });
-
-        mediaRecorder.ondataavailable = (e) => {
-            if (e.data.size > 0) socket.emit('audio-chunk', e.data);
-        };
-
-        const btn = document.getElementById('talk-btn');
+        const chat = document.getElementById('chat');
+        const status = document.getElementById('status');
+        const userBar = document.getElementById('user-bar');
         
-        btn.onmousedown = btn.ontouchstart = (e) => {
-            if(e.cancelable) e.preventDefault();
-            if(mediaRecorder.state === 'inactive') {
-                mediaRecorder.start(500); // Tramos de medio segundo
-                status.innerText = "TRANSMITIENDO...";
-                status.style.color = "var(--error)";
-            }
-        };
+        let audioEnabled = false;
 
-        btn.onmouseup = btn.ontouchend = () => {
-            if(mediaRecorder.state === 'recording') {
-                mediaRecorder.stop();
-                status.innerText = "RADIO EN ESPERA";
-                status.style.color = "var(--accent)";
+        // Desbloqueo de audio (Touch/Click)
+        function enableAudio() {
+            audioEnabled = true;
+            status.innerText = "SISTEMA LISTO";
+            userBar.style.color = "var(--accent)";
+            console.log("Audio desbloqueado");
+        }
+        document.addEventListener('click', enableAudio, { once: true });
+        document.addEventListener('touchstart', enableAudio, { once: true });
+
+        // --- RECEPCIÓN ---
+        socket.on('connect', () => {
+            userBar.innerText = "ESTADO: EN LÍNEA ✅";
+        });
+
+        socket.on('user-list', (list) => {
+            userBar.innerText = `USUARIOS (${list.length}): ${list.join(', ')}`;
+        });
+
+        socket.on('chat-message', (data) => {
+            chat.innerHTML += `<div class="msg"><b>${data.id}:</b> ${data.text}</div>`;
+            chat.scrollTop = chat.scrollHeight;
+        });
+
+        // Receptor de audio optimizado
+        socket.on('audio-stream', (data) => {
+            if (!audioEnabled) {
+                userBar.innerText = "⚠️ TOCA LA PANTALLA PARA ACTIVAR AUDIO";
+                return;
             }
-        };
-    });
-</script>
+
+            // Creamos un Blob a partir de los datos binarios recibidos
+            // Usamos el tipo genérico para que el navegador repare la cabecera
+            const blob = new Blob([data], { type: 'audio/webm; codecs=opus' });
+            const url = URL.createObjectURL(blob);
+            const audio = new Audio(url);
+
+            audio.play().catch(e => console.log("Bloqueo de reproducción dinámica"));
+            
+            // Liberación de memoria
+            audio.onended = () => URL.revokeObjectURL(url);
+        });
+
+        // --- EMISIÓN ---
+        function sendMessage() {
+            const input = document.getElementById('chat-input');
+            if(input.value.trim()) {
+                socket.emit('chat-message', input.value);
+                input.value = '';
+                enableAudio();
+            }
+        }
+
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+            const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm; codecs=opus' });
+
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) socket.emit('audio-chunk', e.data);
+            };
+
+            const btn = document.getElementById('talk-btn');
+            
+            const startRec = (e) => {
+                if(e.cancelable) e.preventDefault();
+                enableAudio();
+                if(mediaRecorder.state === 'inactive') {
+                    mediaRecorder.start(600); // Tramos de 600ms para estabilidad
+                    status.innerText = "TRANSMITIENDO...";
+                    status.style.color = "var(--error)";
+                }
+            };
+
+            const stopRec = () => {
+                if(mediaRecorder.state === 'recording') {
+                    mediaRecorder.stop();
+                    status.innerText = "SISTEMA LISTO";
+                    status.style.color = "var(--accent)";
+                }
+            };
+
+            btn.onmousedown = btn.ontouchstart = startRec;
+            btn.onmouseup = btn.ontouchend = stopRec;
+        }).catch(err => {
+            userBar.innerText = "ERROR: MICRO NO DETECTADO";
+            userBar.style.color = "var(--error)";
+        });
+    </script>
 </body>
 </html>
