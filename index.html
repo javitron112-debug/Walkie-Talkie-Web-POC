@@ -9,31 +9,57 @@
         :root { --main: #00ff41; --dark: #0a0a0a; --panel: #161616; --red: #ff3131; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--dark); color: white; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         
+        /* Overlay de Nombre */
         #nick-overlay { position: fixed; inset: 0; background: var(--dark); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
-        .start-card { background: var(--panel); padding: 30px; border-radius: 15px; border: 1px solid var(--main); text-align: center; }
+        .start-card { background: var(--panel); padding: 30px; border-radius: 15px; border: 1px solid var(--main); text-align: center; width: 80%; }
         
-        header { padding: 15px; background: #000; border-bottom: 2px solid var(--main); display: flex; justify-content: space-between; align-items: center; }
+        header { padding: 15px; background: #000; border-bottom: 2px solid var(--main); display: flex; justify-content: space-between; align-items: center; font-weight: bold; }
         #status-dot { width: 10px; height: 10px; background: #555; border-radius: 50%; display: inline-block; margin-right: 5px; }
         .online-dot { background: var(--main) !important; box-shadow: 0 0 8px var(--main); }
 
+        /* Chat */
         #chat { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; background: #0d0d0d; }
-        .msg { background: var(--panel); padding: 10px; border-radius: 8px; border-left: 4px solid var(--main); max-width: 85%; }
+        .msg { background: var(--panel); padding: 10px; border-radius: 8px; border-left: 4px solid var(--main); max-width: 85%; align-self: flex-start; }
         .msg b { color: var(--main); font-size: 0.8em; display: block; margin-bottom: 4px; }
 
-        .viz-box { height: 60px; width: 100%; background: #000; border-top: 1px solid #333; }
+        /* Visualizador */
+        .viz-box { height: 50px; width: 100%; background: #000; border-top: 1px solid #333; }
         canvas { width: 100%; height: 100%; }
 
-        .controls { background: #000; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 15px; border-top: 1px solid #333; }
-        .input-row { display: flex; width: 100%; gap: 10px; }
-        input { flex: 1; padding: 12px; border-radius: 20px; border: 1px solid #444; background: #111; color: white; outline: none; }
-        
-        #talk-btn { 
-            width: 100px; height: 100px; border-radius: 50%; border: none; background: var(--red); 
-            color: white; font-weight: bold; cursor: pointer; transition: 0.1s;
-            box-shadow: 0 5px 0 #8b0000; touch-action: none;
+        /* Controles */
+        .controls { 
+            background: #000; 
+            padding: 15px; 
+            padding-bottom: 30px; /* Espacio extra para móviles */
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            gap: 12px; 
+            border-top: 1px solid #333; 
         }
-        #talk-btn:active { transform: translateY(4px); box-shadow: none; }
-        #talk-btn.recording { filter: brightness(1.3); box-shadow: 0 0 20px var(--red); }
+        .input-row { display: flex; width: 100%; gap: 10px; }
+        input { flex: 1; padding: 12px; border-radius: 10px; border: 1px solid #444; background: #111; color: white; outline: none; font-size: 16px; }
+        
+        /* NUEVO BOTÓN TIPO BARRA */
+        #talk-btn { 
+            width: 100%; 
+            max-width: 400px;
+            height: 60px; 
+            border-radius: 10px; 
+            border: none; 
+            background: linear-gradient(to bottom, #ff4b2b, #ff3131);
+            color: white; 
+            font-weight: bold; 
+            font-size: 1.2em;
+            text-transform: uppercase;
+            cursor: pointer; 
+            transition: 0.1s;
+            box-shadow: 0 4px 0 #8b0000; 
+            touch-action: none;
+            -webkit-user-select: none;
+        }
+        #talk-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #8b0000; background: #ff3131; }
+        #talk-btn.recording { filter: brightness(1.3); box-shadow: 0 0 15px var(--red); border: 2px solid white; }
     </style>
 </head>
 <body>
@@ -41,9 +67,9 @@
     <div id="nick-overlay">
         <div class="start-card">
             <h2 style="color:var(--main)">IDENTIFICACIÓN</h2>
-            <input type="text" id="nick-input" placeholder="Tu Nickname..." style="padding: 10px; border-radius: 5px; width: 80%; margin-bottom: 20px;">
+            <input type="text" id="nick-input" placeholder="Tu Nickname..." style="width: 80%; margin-bottom: 20px;">
             <br>
-            <button onclick="startApp()" style="padding: 10px 40px; background:var(--main); border:none; border-radius:20px; font-weight:bold; cursor:pointer;">CONECTAR</button>
+            <button onclick="startApp()" style="padding: 12px 40px; background:var(--main); border:none; border-radius:20px; font-weight:bold; cursor:pointer; color:black;">CONECTAR</button>
         </div>
     </div>
 
@@ -61,21 +87,18 @@
     <div class="controls">
         <div class="input-row">
             <input type="text" id="chat-input" placeholder="Mensaje...">
-            <button onclick="sendMsg()" style="background:var(--main); border:none; padding:10px 15px; border-radius:20px; font-weight:bold;">></button>
+            <button onclick="sendMsg()" style="background:var(--main); border:none; padding:10px 20px; border-radius:10px; font-weight:bold;">ENVIAR</button>
         </div>
-        <button id="talk-btn">TALK</button>
+        <button id="talk-btn">PULSAR PARA HABLAR</button>
     </div>
 
     <script>
-        // --- NUEVA URL ACTUALIZADA ---
+        // URL ACTUALIZADA
         const SERVER_URL = "https://earlier-contracting-packages-furnishings.trycloudflare.com"; 
         
-        // BLOQUEO DE ERRORES: Forzamos polling y desactivamos upgrades de WebSocket fallidos
         const socket = io(SERVER_URL, {
             transports: ['polling'], 
-            upgrade: false,
-            reconnection: true,
-            reconnectionAttempts: Infinity
+            upgrade: false
         });
 
         let audioCtx, analyser, dataArray;
@@ -126,7 +149,7 @@
 
         socket.on('connect', () => {
             document.getElementById('status-dot').classList.add('online-dot');
-            document.getElementById('status-text').innerText = "ONLINE (POLLING)";
+            document.getElementById('status-text').innerText = "CONECTADO";
         });
 
         socket.on('audio-stream', async (data) => {
@@ -155,19 +178,24 @@
                 setTimeout(() => { if(recorder && recorder.state === "recording") recorder.stop(); }, 800);
             };
 
-            btn.onmousedown = btn.ontouchstart = (e) => {
+            const press = (e) => {
                 if(e.cancelable) e.preventDefault();
                 if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
                 isRec = true;
                 btn.classList.add('recording');
+                btn.innerText = "TRANSMITIENDO...";
                 startLoop();
             };
 
-            btn.onmouseup = btn.ontouchend = () => {
+            const release = () => {
                 isRec = false;
                 btn.classList.remove('recording');
+                btn.innerText = "PULSAR PARA HABLAR";
                 if(recorder) recorder.stop();
             };
+
+            btn.onmousedown = btn.ontouchstart = press;
+            btn.onmouseup = btn.ontouchend = release;
         });
     </script>
 </body>
