@@ -3,182 +3,155 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Radio Pro V13 | Secure Edition</title>
+    <title>Radio Pro E2EE | V14</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        :root { 
-            --neon: #00ff41; 
-            --glass: rgba(255, 255, 255, 0.08); 
-            --error: #ff3131;
-            --bg-dark: #050508;
-        }
-        
+        :root { --neon: #00ff41; --glass: rgba(255, 255, 255, 0.08); --error: #ff3131; }
         body { 
             margin: 0; background: #07070c; color: white; 
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            display: flex; justify-content: center; align-items: center; 
-            height: 100vh; overflow: hidden;
+            font-family: 'Segoe UI', sans-serif; display: flex; 
+            justify-content: center; align-items: center; height: 100vh; overflow: hidden;
+            transition: background 0.3s;
         }
-
-        /* Contenedor Principal Capacitativo */
         .glass-container {
-            width: 95%; max-width: 420px; height: 90vh;
-            background: var(--glass); backdrop-filter: blur(25px);
-            -webkit-backdrop-filter: blur(25px);
+            width: 95%; max-width: 400px; height: 92vh;
+            background: var(--glass); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
             border-radius: 30px; border: 1px solid rgba(255,255,255,0.1);
-            display: flex; flex-direction: column; padding: 25px;
-            box-sizing: border-box; position: relative;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            display: flex; flex-direction: column; padding: 20px; box-sizing: border-box;
         }
-
-        header { 
-            display: flex; justify-content: space-between; 
-            font-size: 11px; padding-bottom: 12px; 
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            letter-spacing: 1px; color: #888;
-        }
-
-        /* Chat con scroll invisible pero funcional */
-        #chat { 
-            flex: 1; overflow-y: auto; margin: 15px 0; 
-            padding-right: 5px; font-size: 14px; 
-            display: flex; flex-direction: column; gap: 8px;
-        }
-        .msg { background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 12px; }
-        .msg b { color: var(--neon); text-transform: uppercase; font-size: 10px; display: block; margin-bottom: 2px; }
-
-        /* Caja de Visualización (Ondas) */
-        .viz-box { 
-            height: 80px; background: rgba(0,0,0,0.5); border-radius: 18px; 
-            position: relative; overflow: hidden; border: 1px solid rgba(255,255,255,0.05);
-            margin-bottom: 15px;
-        }
-        canvas { width: 100%; height: 100%; display: block; }
-        #voice-id { 
-            position: absolute; top: 10px; left: 15px; 
-            font-size: 10px; font-weight: 900; color: #555; 
-            text-transform: uppercase; transition: 0.3s;
-        }
-
-        /* Controles de Texto */
-        .input-group { display: flex; gap: 10px; margin-bottom: 15px; }
-        input { 
-            flex: 1; padding: 14px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.1);
-            background: rgba(0,0,0,0.4); color: white; outline: none; font-size: 16px;
-        }
-        input:focus { border-color: var(--neon); }
-
-        .send-btn { 
-            background: var(--neon); border: none; padding: 0 20px; 
-            border-radius: 14px; font-weight: bold; cursor: pointer; color: black;
-        }
-
-        /* Botón PTT - Área de interacción completa */
+        header { display: flex; justify-content: space-between; font-size: 10px; border-bottom: 1px solid #333; padding-bottom: 10px; }
+        #chat { flex: 1; overflow-y: auto; margin: 10px 0; font-size: 13px; display: flex; flex-direction: column; gap: 5px; }
+        .viz-box { height: 60px; background: rgba(0,0,0,0.5); border-radius: 15px; position: relative; overflow: hidden; }
+        canvas { width: 100%; height: 100%; }
+        #voice-id { position: absolute; top: 5px; left: 10px; font-size: 9px; color: #555; font-weight: bold; }
+        input { background: #111; border: 1px solid #333; color: white; padding: 12px; border-radius: 10px; margin: 5px 0; outline: none; }
         #talk-btn {
-            width: 100%; padding: 22px; border-radius: 22px; border: none;
+            width: 100%; padding: 20px; border-radius: 15px; border: none;
             background: linear-gradient(135deg, #e74c3c, var(--error));
-            color: white; font-weight: 800; font-size: 16px; letter-spacing: 2px;
-            cursor: pointer; box-shadow: 0 6px 20px rgba(255, 49, 49, 0.3);
-            touch-action: none; user-select: none; transition: 0.2s;
+            color: white; font-weight: 800; cursor: pointer; touch-action: none; user-select: none;
         }
-        #talk-btn:active { transform: scale(0.96); }
-        #talk-btn.recording { animation: pulse 1.2s infinite; filter: brightness(1.2); }
-        @keyframes pulse { 0% { box-shadow: 0 0 0 0px rgba(255, 49, 49, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(255, 49, 49, 0); } }
-
-        /* Login Overlay */
-        #auth-overlay { position: fixed; inset: 0; background: var(--bg-dark); display: flex; justify-content: center; align-items: center; z-index: 1000; }
-        .card { background: #0f0f15; padding: 40px 30px; border-radius: 30px; text-align: center; border: 1px solid var(--neon); width: 290px; }
-        .card h2 { margin-bottom: 25px; letter-spacing: 5px; font-size: 18px; }
+        #talk-btn.recording { animation: pulse 1s infinite; filter: brightness(1.2); }
+        .sos-btn { background: #300; color: var(--error); border: 1px solid var(--error); padding: 8px; border-radius: 10px; margin-top: 8px; font-size: 11px; font-weight: bold; cursor: pointer; }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(0.98); } 100% { transform: scale(1); } }
+        .sos-active { background: #600 !important; animation: emergency 0.4s infinite; }
+        @keyframes emergency { 0% { opacity: 1; } 50% { opacity: 0.7; } }
+        #auth-overlay { position: fixed; inset: 0; background: #000; display: flex; justify-content: center; align-items: center; z-index: 1000; }
+        .card { background: #0a0a15; padding: 30px; border-radius: 25px; border: 1px solid var(--neon); text-align: center; width: 280px; }
+        .saver canvas { display: none; }
     </style>
 </head>
-<body>
+<body id="b-main">
 
     <div id="auth-overlay">
         <div class="card">
-            <h2 style="color: var(--neon);">SYSTEM AUTH</h2>
-            <input type="text" id="nick-in" placeholder="OPERADOR ID" maxlength="15">
-            <input type="text" id="room-in" placeholder="NOMBRE CANAL" maxlength="20">
-            <input type="password" id="pass-in" placeholder="CLAVE DE ACCESO">
-            <br><br>
-            <button onclick="join()" style="width: 100%; padding: 15px; background: var(--neon); border: none; border-radius: 15px; font-weight: bold; cursor: pointer; color: black;">ENTRAR EN FRECUENCIA</button>
+            <h2 style="color: var(--neon); letter-spacing: 2px;">SECURE RADIO</h2>
+            <input type="text" id="nick-in" placeholder="ID OPERADOR">
+            <input type="text" id="room-in" placeholder="CANAL">
+            <input type="password" id="pass-in" placeholder="CLAVE E2EE">
+            <button onclick="startApp()" style="width:100%; padding:15px; background:var(--neon); border:none; border-radius:10px; margin-top:15px; font-weight:bold; cursor:pointer;">CONECTAR</button>
+            <p style="font-size: 8px; color: #555; margin-top: 20px; text-align: justify;">
+                AVISO: Proyecto educativo. No para uso en emergencias reales. El cifrado es extremo a extremo.
+            </p>
         </div>
     </div>
 
     <div class="glass-container">
         <header>
-            <span id="room-display">CANAL: NO_LINK</span>
-            <span id="user-count">USERS: 0</span>
+            <span id="sig">LATENCIA: --ms</span>
+            <span id="room-disp">CANAL: ---</span>
+            <button onclick="document.body.classList.toggle('saver')" style="background:none; border:none; color:#555; font-size:12px; cursor:pointer;">🔋</button>
         </header>
-        
         <div id="chat"></div>
-        
         <div class="viz-box">
             <div id="voice-id">RECEPTOR: IDLE</div>
             <canvas id="visualizer"></canvas>
         </div>
-
-        <div class="input-group">
-            <input type="text" id="msg-in" placeholder="Enviar comms..." maxlength="280">
-            <button class="send-btn" onclick="send()">></button>
+        <div style="display:flex; gap:5px; margin: 10px 0;">
+            <input type="text" id="msg-in" style="flex:1;" placeholder="Comms...">
+            <button onclick="send()" style="background:var(--neon); border:none; border-radius:10px; width:45px; cursor:pointer; font-weight:bold;">></button>
         </div>
-
         <button id="talk-btn">PULSAR PARA HABLAR</button>
+        <button id="sos-btn" class="sos-btn">SOS (MANTENER 3s)</button>
     </div>
 
     <script>
-        // URL ACTUALIZADA
-        const SERVER = "https://ratios-collections-financial-women.trycloudflare.com";
-        const socket = io(SERVER, { transports: ['polling'] });
+        // --- CAMBIA ESTA URL POR LA DE TU TÚNEL O DOMINIO ---
+        const SERVER = "https://russell-hearts-vertical-digital.trycloudflare.com"; 
         
-        let audioCtx, analyser, dataArray;
-        const canvas = document.getElementById('visualizer');
-        const ctx = canvas.getContext('2d');
-        const voiceId = document.getElementById('voice-id');
+        const socket = io(SERVER, { transports: ['polling'] });
+        let audioCtx, analyser, dataArray, cryptoKey, sosTimer;
 
-        function join() {
-            const nickname = document.getElementById('nick-in').value.trim();
-            const roomName = document.getElementById('room-in').value.trim();
-            const password = document.getElementById('pass-in').value;
+        // MOTOR E2EE (AES-GCM)
+        async function deriveKey(password) {
+            const enc = new TextEncoder();
+            const baseKey = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveKey"]);
+            return crypto.subtle.deriveKey(
+                { name: "PBKDF2", salt: enc.encode("radio-salt-v14"), iterations: 100000, hash: "SHA-256" },
+                baseKey, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]
+            );
+        }
+
+        async function encrypt(data) {
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, cryptoKey, data);
+            return { iv: Array.from(iv), ciphertext: Array.from(new Uint8Array(ciphertext)) };
+        }
+
+        async function decrypt(iv, data) {
+            try {
+                const dec = await crypto.subtle.decrypt(
+                    { name: "AES-GCM", iv: new Uint8Array(iv) }, 
+                    cryptoKey, new Uint8Array(data)
+                );
+                return dec;
+            } catch(e) { return null; }
+        }
+
+        async function startApp() {
+            const pass = document.getElementById('pass-in').value;
+            const nick = document.getElementById('nick-in').value;
+            const room = document.getElementById('room-in').value;
+            if(!pass || !nick || !room) return alert("Faltan datos");
             
-            if(!nickname || !roomName || !password) return alert("Faltan credenciales");
-            socket.emit('join-room', { nickname, roomName, password });
+            cryptoKey = await deriveKey(pass);
+            socket.emit('join-room', { nickname: nick, roomName: room, password: pass });
         }
 
         socket.on('joined-success', (d) => {
             document.getElementById('auth-overlay').style.display = 'none';
-            document.getElementById('room-display').innerText = "CANAL: " + d.roomName.toUpperCase();
+            document.getElementById('room-disp').innerText = "CANAL: " + d.roomName.toUpperCase();
             initAudio();
         });
 
         socket.on('error-msg', (m) => alert(m));
 
-        socket.on('user-list', (list) => {
-            document.getElementById('user-count').innerText = `USERS: ${list.length}`;
+        // SOS
+        const sBtn = document.getElementById('sos-btn');
+        const triggerSOS = () => { socket.emit('sos-alert'); alert("ALERTA SOS ENVIADA"); };
+        sBtn.onmousedown = sBtn.ontouchstart = () => sosTimer = setTimeout(triggerSOS, 3000);
+        sBtn.onmouseup = sBtn.ontouchend = () => clearTimeout(sosTimer);
+
+        socket.on('sos-activated', (d) => {
+            document.body.classList.add('sos-active');
+            const beep = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+            beep.play();
+            setTimeout(() => document.body.classList.remove('sos-active'), 5000);
         });
 
-        // SEGURIDAD: Renderizado seguro de mensajes (Sin innerHTML)
-        socket.on('chat-message', (d) => {
-            const chat = document.getElementById('chat');
-            const msgDiv = document.createElement('div');
-            msgDiv.className = 'msg';
-            
-            const b = document.createElement('b');
-            b.textContent = d.user;
-            
-            const span = document.createElement('span');
-            span.textContent = d.text;
-            
-            msgDiv.appendChild(b);
-            msgDiv.appendChild(span);
-            chat.appendChild(msgDiv);
-            chat.scrollTop = chat.scrollHeight;
-        });
-
+        // AUDIO
         function initAudio() {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            analyser = audioCtx.createAnalyser();
-            analyser.fftSize = 64;
+            analyser = audioCtx.createAnalyser(); analyser.fftSize = 64;
             dataArray = new Uint8Array(analyser.frequencyBinCount);
+            setInterval(() => {
+                const start = Date.now();
+                socket.emit('ping-check');
+                socket.once('pong-check', () => {
+                    const lat = Date.now() - start;
+                    document.getElementById('sig').innerText = `LAT: ${lat}ms`;
+                    document.getElementById('sig').style.color = lat > 200 ? 'red' : 'var(--neon)';
+                });
+            }, 4000);
             draw();
         }
 
@@ -186,73 +159,59 @@
             requestAnimationFrame(draw);
             if(!analyser) return;
             analyser.getByteFrequencyData(dataArray);
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            const barWidth = (canvas.width / dataArray.length) * 1.2;
-            let x = 0;
-            
-            dataArray.forEach(v => {
-                const h = (v / 255) * canvas.height;
-                ctx.fillStyle = `rgba(0, 255, 65, ${v/255 + 0.1})`;
-                ctx.fillRect(x, canvas.height - h, barWidth - 1, h);
-                x += barWidth;
+            const canvas = document.getElementById('visualizer');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0,0,canvas.width, canvas.height);
+            dataArray.forEach((v, i) => {
+                ctx.fillStyle = `rgba(0,255,65,${v/255})`;
+                ctx.fillRect(i*12, canvas.height - (v/2), 10, v/2);
             });
         }
 
-        socket.on('audio-stream', (d) => {
-            voiceId.innerText = `RECIBIENDO: ${d.user}`;
-            voiceId.style.color = "var(--neon)";
+        socket.on('audio-stream', async (d) => {
+            const dec = await decrypt(d.buffer.iv, d.buffer.ciphertext);
+            if(!dec) return;
             
-            const blob = new Blob([d.buffer], { type: 'audio/webm; codecs=opus' });
+            document.getElementById('voice-id').innerText = "RECIBIENDO: " + d.user;
+            const blob = new Blob([dec], {type:'audio/webm; codecs=opus'});
             const audio = new Audio(URL.createObjectURL(blob));
             const src = audioCtx.createMediaElementSource(audio);
-            src.connect(analyser); 
-            analyser.connect(audioCtx.destination);
-            
-            audio.play().catch(e => console.log("Interacción requerida"));
-            audio.onended = () => {
-                voiceId.innerText = "RECEPTOR: IDLE";
-                voiceId.style.color = "#555";
-            };
+            src.connect(analyser); analyser.connect(audioCtx.destination);
+            audio.play();
+            audio.onended = () => document.getElementById('voice-id').innerText = "RECEPTOR: IDLE";
         });
 
-        // Configuración de Micrófono
-        const btn = document.getElementById('talk-btn');
         navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+            const btn = document.getElementById('talk-btn');
             let rec;
-            const start = (e) => {
+            const start = async (e) => {
                 if(e.cancelable) e.preventDefault();
                 if(audioCtx.state === 'suspended') audioCtx.resume();
-                
                 btn.classList.add('recording');
-                btn.innerText = "TRANSMITIENDO...";
-                voiceId.innerText = "EMITIENDO...";
-                
-                rec = new MediaRecorder(stream, { mimeType: 'audio/webm; codecs=opus' });
-                rec.ondataavailable = async ev => socket.emit('audio-chunk', await ev.data.arrayBuffer());
+                rec = new MediaRecorder(stream);
+                rec.ondataavailable = async ev => {
+                    const encrypted = await encrypt(await ev.data.arrayBuffer());
+                    socket.emit('audio-chunk', encrypted);
+                };
                 rec.start();
             };
-            
-            const stop = () => {
-                btn.classList.remove('recording');
-                btn.innerText = "PULSAR PARA HABLAR";
-                voiceId.innerText = "RECEPTOR: IDLE";
-                if(rec && rec.state !== "inactive") rec.stop();
-            };
-
-            // Eventos para móvil y PC
+            const stop = () => { btn.classList.remove('recording'); if(rec) rec.stop(); };
             btn.onmousedown = btn.ontouchstart = start;
             btn.onmouseup = btn.ontouchend = btn.onmouseleave = stop;
         });
 
         function send() {
-            const input = document.getElementById('msg-in');
-            const val = input.value.trim();
-            if(val) {
-                socket.emit('chat-message', val);
-                input.value = "";
-            }
+            const i = document.getElementById('msg-in');
+            if(i.value.trim()) { socket.emit('chat-message', i.value); i.value = ""; }
         }
+
+        socket.on('chat-message', d => {
+            const c = document.getElementById('chat');
+            const div = document.createElement('div');
+            div.innerHTML = `<b style="color:var(--neon)">${d.user}:</b> ${d.text}`;
+            c.appendChild(div);
+            c.scrollTop = c.scrollHeight;
+        });
     </script>
 </body>
 </html>
