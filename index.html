@@ -3,82 +3,111 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Radio Pro V13 | Multi-Channel</title>
+    <title>Radio Pro V13 | Secure Edition</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        :root { --neon: #00ff41; --glass: rgba(255, 255, 255, 0.08); --error: #ff3131; }
+        :root { 
+            --neon: #00ff41; 
+            --glass: rgba(255, 255, 255, 0.08); 
+            --error: #ff3131;
+            --bg-dark: #050508;
+        }
         
         body { 
             margin: 0; background: #07070c; color: white; 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Segoe UI', system-ui, sans-serif;
             display: flex; justify-content: center; align-items: center; 
             height: 100vh; overflow: hidden;
         }
 
-        /* Contenedor Principal */
+        /* Contenedor Principal Capacitativo */
         .glass-container {
-            width: 90%; max-width: 400px; height: 90vh;
+            width: 95%; max-width: 420px; height: 90vh;
             background: var(--glass); backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
             border-radius: 30px; border: 1px solid rgba(255,255,255,0.1);
-            display: flex; flex-direction: column; padding: 20px;
+            display: flex; flex-direction: column; padding: 25px;
             box-sizing: border-box; position: relative;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
         }
 
-        /* Chat y Lista de Usuarios */
-        header { display: flex; justify-content: space-between; font-size: 11px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); }
-        #chat { flex: 1; overflow-y: auto; margin: 15px 0; padding-right: 5px; font-size: 14px; }
-        .msg { margin-bottom: 8px; line-height: 1.4; }
-        .msg b { color: var(--neon); text-transform: uppercase; font-size: 10px; display: block; }
+        header { 
+            display: flex; justify-content: space-between; 
+            font-size: 11px; padding-bottom: 12px; 
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            letter-spacing: 1px; color: #888;
+        }
+
+        /* Chat con scroll invisible pero funcional */
+        #chat { 
+            flex: 1; overflow-y: auto; margin: 15px 0; 
+            padding-right: 5px; font-size: 14px; 
+            display: flex; flex-direction: column; gap: 8px;
+        }
+        .msg { background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 12px; }
+        .msg b { color: var(--neon); text-transform: uppercase; font-size: 10px; display: block; margin-bottom: 2px; }
 
         /* Caja de Visualización (Ondas) */
         .viz-box { 
-            height: 70px; background: rgba(0,0,0,0.4); border-radius: 15px; 
+            height: 80px; background: rgba(0,0,0,0.5); border-radius: 18px; 
             position: relative; overflow: hidden; border: 1px solid rgba(255,255,255,0.05);
             margin-bottom: 15px;
         }
         canvas { width: 100%; height: 100%; display: block; }
-        #voice-id { position: absolute; top: 8px; left: 12px; font-size: 10px; font-weight: bold; color: #666; letter-spacing: 1px; }
+        #voice-id { 
+            position: absolute; top: 10px; left: 15px; 
+            font-size: 10px; font-weight: 900; color: #555; 
+            text-transform: uppercase; transition: 0.3s;
+        }
 
-        /* Controles */
+        /* Controles de Texto */
         .input-group { display: flex; gap: 10px; margin-bottom: 15px; }
         input { 
-            flex: 1; padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);
-            background: rgba(0,0,0,0.3); color: white; outline: none; font-size: 16px;
+            flex: 1; padding: 14px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(0,0,0,0.4); color: white; outline: none; font-size: 16px;
+        }
+        input:focus { border-color: var(--neon); }
+
+        .send-btn { 
+            background: var(--neon); border: none; padding: 0 20px; 
+            border-radius: 14px; font-weight: bold; cursor: pointer; color: black;
         }
 
-        /* Botón PTT - Área de toque total */
+        /* Botón PTT - Área de interacción completa */
         #talk-btn {
-            width: 100%; padding: 25px; border-radius: 20px; border: none;
+            width: 100%; padding: 22px; border-radius: 22px; border: none;
             background: linear-gradient(135deg, #e74c3c, var(--error));
-            color: white; font-weight: 800; font-size: 18px; letter-spacing: 2px;
-            cursor: pointer; box-shadow: 0 4px 15px rgba(255, 49, 49, 0.3);
+            color: white; font-weight: 800; font-size: 16px; letter-spacing: 2px;
+            cursor: pointer; box-shadow: 0 6px 20px rgba(255, 49, 49, 0.3);
             touch-action: none; user-select: none; transition: 0.2s;
         }
-        #talk-btn.recording { background: var(--error); animation: pulse 1s infinite; }
-        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(0.98); opacity: 0.8; } 100% { transform: scale(1); } }
+        #talk-btn:active { transform: scale(0.96); }
+        #talk-btn.recording { animation: pulse 1.2s infinite; filter: brightness(1.2); }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0px rgba(255, 49, 49, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(255, 49, 49, 0); } }
 
         /* Login Overlay */
-        #auth-overlay { position: fixed; inset: 0; background: #050508; display: flex; justify-content: center; align-items: center; z-index: 1000; }
-        .card { background: #111; padding: 40px; border-radius: 25px; text-align: center; border: 1px solid var(--neon); width: 280px; }
+        #auth-overlay { position: fixed; inset: 0; background: var(--bg-dark); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+        .card { background: #0f0f15; padding: 40px 30px; border-radius: 30px; text-align: center; border: 1px solid var(--neon); width: 290px; }
+        .card h2 { margin-bottom: 25px; letter-spacing: 5px; font-size: 18px; }
     </style>
 </head>
 <body>
 
     <div id="auth-overlay">
         <div class="card">
-            <h2 style="color: var(--neon); margin-bottom: 20px; font-size: 18px;">ACCESO FRECUENCIA</h2>
-            <input type="text" id="nick-in" placeholder="OPERADOR ID">
-            <input type="text" id="room-in" placeholder="CANAL (Ej: ALPHA)">
-            <input type="password" id="pass-in" placeholder="PASSWORD">
+            <h2 style="color: var(--neon);">SYSTEM AUTH</h2>
+            <input type="text" id="nick-in" placeholder="OPERADOR ID" maxlength="15">
+            <input type="text" id="room-in" placeholder="NOMBRE CANAL" maxlength="20">
+            <input type="password" id="pass-in" placeholder="CLAVE DE ACCESO">
             <br><br>
-            <button onclick="join()" style="width: 100%; padding: 15px; background: var(--neon); border: none; border-radius: 12px; font-weight: bold; cursor: pointer;">CONECTAR</button>
+            <button onclick="join()" style="width: 100%; padding: 15px; background: var(--neon); border: none; border-radius: 15px; font-weight: bold; cursor: pointer; color: black;">ENTRAR EN FRECUENCIA</button>
         </div>
     </div>
 
     <div class="glass-container">
         <header>
-            <span id="room-display">CANAL: ---</span>
-            <span id="user-count" style="color: var(--neon);">USUARIOS: 0</span>
+            <span id="room-display">CANAL: NO_LINK</span>
+            <span id="user-count">USERS: 0</span>
         </header>
         
         <div id="chat"></div>
@@ -89,44 +118,59 @@
         </div>
 
         <div class="input-group">
-            <input type="text" id="msg-in" placeholder="Escribir mensaje...">
-            <button onclick="send()" style="background:var(--neon); border:none; padding: 0 15px; border-radius:10px; font-weight:bold; cursor:pointer;">></button>
+            <input type="text" id="msg-in" placeholder="Enviar comms..." maxlength="280">
+            <button class="send-btn" onclick="send()">></button>
         </div>
 
         <button id="talk-btn">PULSAR PARA HABLAR</button>
     </div>
 
     <script>
-        // URL SIN ESPACIOS
-        const SERVER = "https://taking-bufing-author-receptor.trycloudflare.com";
+        // URL ACTUALIZADA
+        const SERVER = "https://russell-hearts-vertical-digital.trycloudflare.com";
         const socket = io(SERVER, { transports: ['polling'] });
         
         let audioCtx, analyser, dataArray;
         const canvas = document.getElementById('visualizer');
         const ctx = canvas.getContext('2d');
+        const voiceId = document.getElementById('voice-id');
 
         function join() {
-            const nickname = document.getElementById('nick-in').value;
-            const roomName = document.getElementById('room-in').value;
+            const nickname = document.getElementById('nick-in').value.trim();
+            const roomName = document.getElementById('room-in').value.trim();
             const password = document.getElementById('pass-in').value;
-            if(!nickname || !roomName || !password) return alert("Completa todos los campos");
             
+            if(!nickname || !roomName || !password) return alert("Faltan credenciales");
             socket.emit('join-room', { nickname, roomName, password });
         }
 
         socket.on('joined-success', (d) => {
             document.getElementById('auth-overlay').style.display = 'none';
-            document.getElementById('room-display').innerText = "CANAL: " + d.roomName;
+            document.getElementById('room-display').innerText = "CANAL: " + d.roomName.toUpperCase();
             initAudio();
         });
 
+        socket.on('error-msg', (m) => alert(m));
+
         socket.on('user-list', (list) => {
-            document.getElementById('user-count').innerText = `USUARIOS: ${list.length}`;
+            document.getElementById('user-count').innerText = `USERS: ${list.length}`;
         });
 
+        // SEGURIDAD: Renderizado seguro de mensajes (Sin innerHTML)
         socket.on('chat-message', (d) => {
             const chat = document.getElementById('chat');
-            chat.innerHTML += `<div class="msg"><b>${d.user}</b> ${d.text}</div>`;
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'msg';
+            
+            const b = document.createElement('b');
+            b.textContent = d.user;
+            
+            const span = document.createElement('span');
+            span.textContent = d.text;
+            
+            msgDiv.appendChild(b);
+            msgDiv.appendChild(span);
+            chat.appendChild(msgDiv);
             chat.scrollTop = chat.scrollHeight;
         });
 
@@ -143,54 +187,71 @@
             if(!analyser) return;
             analyser.getByteFrequencyData(dataArray);
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            const barWidth = (canvas.width / dataArray.length) * 1.5;
+            
+            const barWidth = (canvas.width / dataArray.length) * 1.2;
             let x = 0;
+            
             dataArray.forEach(v => {
                 const h = (v / 255) * canvas.height;
-                ctx.fillStyle = `rgba(0, 255, 65, ${v/255 + 0.2})`;
-                ctx.fillRect(x, canvas.height - h, barWidth - 2, h);
+                ctx.fillStyle = `rgba(0, 255, 65, ${v/255 + 0.1})`;
+                ctx.fillRect(x, canvas.height - h, barWidth - 1, h);
                 x += barWidth;
             });
         }
 
         socket.on('audio-stream', (d) => {
-            document.getElementById('voice-id').innerText = "RECIBIENDO: " + d.user;
-            document.getElementById('voice-id').style.color = "var(--neon)";
+            voiceId.innerText = `RECIBIENDO: ${d.user}`;
+            voiceId.style.color = "var(--neon)";
+            
             const blob = new Blob([d.buffer], { type: 'audio/webm; codecs=opus' });
             const audio = new Audio(URL.createObjectURL(blob));
             const src = audioCtx.createMediaElementSource(audio);
-            src.connect(analyser); analyser.connect(audioCtx.destination);
-            audio.play().catch(() => {});
+            src.connect(analyser); 
+            analyser.connect(audioCtx.destination);
+            
+            audio.play().catch(e => console.log("Interacción requerida"));
             audio.onended = () => {
-                document.getElementById('voice-id').innerText = "RECEPTOR: IDLE";
-                document.getElementById('voice-id').style.color = "#666";
+                voiceId.innerText = "RECEPTOR: IDLE";
+                voiceId.style.color = "#555";
             };
         });
 
+        // Configuración de Micrófono
         const btn = document.getElementById('talk-btn');
         navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
             let rec;
             const start = (e) => {
                 if(e.cancelable) e.preventDefault();
                 if(audioCtx.state === 'suspended') audioCtx.resume();
+                
                 btn.classList.add('recording');
                 btn.innerText = "TRANSMITIENDO...";
+                voiceId.innerText = "EMITIENDO...";
+                
                 rec = new MediaRecorder(stream, { mimeType: 'audio/webm; codecs=opus' });
                 rec.ondataavailable = async ev => socket.emit('audio-chunk', await ev.data.arrayBuffer());
                 rec.start();
             };
+            
             const stop = () => {
                 btn.classList.remove('recording');
                 btn.innerText = "PULSAR PARA HABLAR";
-                if(rec) rec.stop();
+                voiceId.innerText = "RECEPTOR: IDLE";
+                if(rec && rec.state !== "inactive") rec.stop();
             };
+
+            // Eventos para móvil y PC
             btn.onmousedown = btn.ontouchstart = start;
-            btn.onmouseup = btn.ontouchend = stop;
+            btn.onmouseup = btn.ontouchend = btn.onmouseleave = stop;
         });
 
         function send() {
             const input = document.getElementById('msg-in');
-            if(input.value.trim()) { socket.emit('chat-message', input.value); input.value = ""; }
+            const val = input.value.trim();
+            if(val) {
+                socket.emit('chat-message', val);
+                input.value = "";
+            }
         }
     </script>
 </body>
