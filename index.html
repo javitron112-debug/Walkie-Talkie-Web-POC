@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="icon" href="data:;base64,iVBORw0KGgo=">
-    <title>SECURE COMMS V15.6</title>
+    <title>SECURE COMMS V15.7</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         :root { --neon: #00ff41; --glass: rgba(255, 255, 255, 0.08); --sos: #ff3131; }
@@ -13,7 +13,7 @@
         header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid #333; }
         #chat { flex: 1; overflow-y: auto; margin: 10px 0; font-size: 13px; display: flex; flex-direction: column; gap: 5px; }
         .msg { background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 12px; border-left: 3px solid var(--neon); }
-        .viz-box { height: 60px; background: rgba(0,0,0,0.5); border-radius: 18px; position: relative; overflow: hidden; border: 2px solid #333; transition: 0.3s; }
+        .viz-box { height: 60px; background: rgba(0,0,0,0.5); border-radius: 18px; position: relative; overflow: hidden; border: 2px solid #333; transition: 0.2s; }
         #voice-id { position: absolute; top: 5px; left: 10px; font-size: 9px; color: #555; font-weight: bold; }
         .input-bar { display: flex; gap: 8px; margin: 10px 0; }
         input { background: #111; border: 1px solid #333; color: white; padding: 12px; border-radius: 15px; outline: none; width: 100%; }
@@ -23,13 +23,14 @@
         @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(0.97); } 100% { transform: scale(1); } }
         #auth-overlay { position: fixed; inset: 0; background: #000; display: flex; justify-content: center; align-items: center; z-index: 1000; }
         .card { background: #0a0a15; padding: 30px; border-radius: 25px; border: 1px solid var(--neon); text-align: center; width: 290px; }
+        #user-list-box { position: absolute; top: 70px; left: 20px; right: 20px; background: rgba(10,10,20,0.98); border: 1px solid var(--neon); border-radius: 15px; padding: 15px; z-index: 100; display: none; }
     </style>
 </head>
 <body>
 
     <div id="auth-overlay">
         <div class="card">
-            <h2 style="color: var(--neon); letter-spacing: 2px;">V15.6 SECURE</h2>
+            <h2 style="color: var(--neon); letter-spacing: 2px;">V15.7 SECURE</h2>
             <input type="text" id="nick-in" placeholder="ID OPERADOR">
             <input type="text" id="room-in" placeholder="CANAL">
             <input type="password" id="pass-in" placeholder="CLAVE E2EE">
@@ -45,6 +46,7 @@
         </header>
         <div id="chat"></div>
         <div class="viz-box" id="v-box"><div id="voice-id">SISTEMA: IDLE</div><canvas id="visualizer"></canvas></div>
+        <div id="user-list-box"><div id="user-names" style="color:var(--neon); font-size:12px;"></div></div>
         <div class="input-bar">
             <input type="text" id="msg-in" placeholder="Escribir..." onkeydown="if(event.key==='Enter') send()">
             <button onclick="send()" style="background:var(--neon); border:none; border-radius:15px; width:50px; cursor:pointer;">></button>
@@ -53,6 +55,7 @@
     </div>
 
     <script>
+        // --- CAMBIA ESTA URL ---
         const SERVER = "https://indication-viii-coalition-litigation.trycloudflare.com"; 
         const socket = io(SERVER, { transports: ['polling'] });
 
@@ -65,7 +68,7 @@
         async function deriveKey(p) {
             const enc = new TextEncoder();
             const bk = await crypto.subtle.importKey("raw", enc.encode(p), "PBKDF2", false, ["deriveKey"]);
-            return crypto.subtle.deriveKey({ name: "PBKDF2", salt: enc.encode("v15-6-salt"), iterations: 100000, hash: "SHA-256" }, bk, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+            return crypto.subtle.deriveKey({ name: "PBKDF2", salt: enc.encode("v15-7-salt"), iterations: 100000, hash: "SHA-256" }, bk, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
         }
 
         async function encrypt(d) {
@@ -75,7 +78,8 @@
         }
 
         async function decrypt(iv, d) {
-            try { return await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(iv) }, cryptoKey, new Uint8Array(d)); } catch(e) { return null; }
+            try { return await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(iv) }, cryptoKey, new Uint8Array(d)); } 
+            catch(e) { return null; }
         }
 
         async function startApp() {
@@ -96,7 +100,7 @@
                 const audio = new Audio(URL.createObjectURL(blob));
                 const src = audioCtx.createMediaElementSource(audio);
                 src.connect(analyser); analyser.connect(audioCtx.destination);
-                audio.play().catch(e => console.error("Error play:", e));
+                audio.play().catch(e => {});
                 audio.onended = () => document.getElementById('voice-id').innerText = "SISTEMA: IDLE";
             }
         });
@@ -111,9 +115,10 @@
                 let sum = 0;
                 for (let i = 0; i < input.length; i++) sum += input[i] * input[i];
                 const rms = Math.sqrt(sum / input.length);
-                // UMBRAL MEJORADO (Más sensible: 0.005)
-                window.isQuiet = rms < 0.005; 
-                document.getElementById('v-box').style.borderColor = window.isQuiet ? "#333" : var(--neon);
+                // Noise Gate: Súper sensible para evitar cortes (0.003)
+                window.isQuiet = rms < 0.003; 
+                // CORRECCIÓN: Usar color estático para evitar error 'var'
+                document.getElementById('v-box').style.borderColor = window.isQuiet ? "#333" : "#00ff41";
             };
             source.connect(processor); processor.connect(audioCtx.destination);
 
@@ -133,7 +138,7 @@
                     const enc = await encrypt(await ev.data.arrayBuffer());
                     socket.emit('audio-chunk', enc);
                 };
-                rec.start(300); // Tiempos más cortos para menos latencia
+                rec.start(300);
             });
 
             btn.onmouseup = btn.ontouchend = btn.onmouseleave = () => {
@@ -148,7 +153,6 @@
             dataArray.forEach((v, i) => { ctx.fillStyle = `rgba(0,255,65,${v/255 + 0.1})`; ctx.fillRect(i*12, c.height-(v/2.2), 10, v/2.2); });
         }
 
-        // Resto de funciones (send, toggleUsers, sos...) iguales a la v15.5
         function send() { const i = document.getElementById('msg-in'); if(i.value.trim()){ socket.emit('chat-message', i.value); i.value = ""; } }
         socket.on('chat-message', d => { const chat = document.getElementById('chat'); const div = document.createElement('div'); div.className='msg'; div.innerHTML=`<b>${d.user}:</b> ${d.text}`; chat.appendChild(div); chat.scrollTop = chat.scrollHeight; });
         function toggleUsers() { const box = document.getElementById('user-list-box'); box.style.display = box.style.display === 'block' ? 'none' : 'block'; }
