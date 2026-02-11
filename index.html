@@ -4,13 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="icon" href="data:;base64,iVBORw0KGgo=">
-    <title>SECURE RADIO V15.2 | Tactical</title>
+    <title>SECURE RADIO V15.3</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         :root { --neon: #00ff41; --glass: rgba(255, 255, 255, 0.08); --sos: #ff3131; }
-        body { margin: 0; background: #07070c; color: white; font-family: sans-serif; display: flex; justify-content: center; height: 100vh; overflow: hidden; transition: 0.2s; }
+        body { margin: 0; background: #07070c; color: white; font-family: sans-serif; display: flex; justify-content: center; height: 100vh; overflow: hidden; }
         
-        /* Contenedor Táctico */
         .glass-container { 
             width: 95%; max-width: 450px; height: 95vh; 
             background: var(--glass); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); 
@@ -21,41 +20,35 @@
 
         header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid #333; }
         
-        /* Lista de Usuarios Desplegable */
         #user-list-box { 
             position: absolute; top: 70px; left: 20px; right: 20px; 
             background: rgba(10,10,20,0.98); border: 1px solid var(--neon); 
             border-radius: 15px; padding: 15px; z-index: 100; display: none; 
-            box-shadow: 0 0 20px rgba(0, 255, 65, 0.2);
         }
 
         #chat { flex: 1; overflow-y: auto; margin: 10px 0; font-size: 13px; display: flex; flex-direction: column; gap: 5px; }
         .msg { background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 12px; border-left: 3px solid var(--neon); }
         
         .viz-box { height: 60px; background: rgba(0,0,0,0.5); border-radius: 18px; position: relative; overflow: hidden; border: 1px solid #222; }
-        #voice-id { position: absolute; top: 5px; left: 10px; font-size: 9px; color: #555; font-weight: bold; }
+        #voice-id { position: absolute; top: 5px; left: 10px; font-size: 9px; color: #555; }
         
         .input-bar { display: flex; gap: 8px; margin: 10px 0; }
         input { background: #111; border: 1px solid #333; color: white; padding: 12px; border-radius: 15px; outline: none; width: 100%; }
-        input:focus { border-color: var(--neon); }
 
-        /* Botón PTT con Aire para Móvil */
-        .ptt-container { padding-bottom: 25px; }
+        .ptt-container { padding-bottom: 30px; }
         #talk-btn { 
             width: 100%; padding: 22px; border-radius: 25px; border: none; 
             background: linear-gradient(135deg, #e74c3c, var(--sos)); 
             color: white; font-weight: 900; font-size: 18px; letter-spacing: 2px;
             cursor: pointer; touch-action: none; user-select: none;
-            box-shadow: 0 8px 25px rgba(255, 49, 49, 0.4); transition: 0.1s;
+            box-shadow: 0 8px 25px rgba(255, 49, 49, 0.4); 
         }
         #talk-btn.recording { filter: brightness(1.3); animation: pulse 0.8s infinite; }
         @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(0.97); } }
         
-        /* Pantalla SOS */
         .sos-active { animation: flash-red 0.3s infinite !important; }
         @keyframes flash-red { 0% { background: #07070c; } 50% { background: #600; } }
 
-        /* Login Overlay */
         #auth-overlay { position: fixed; inset: 0; background: #000; display: flex; justify-content: center; align-items: center; z-index: 1000; }
         .card { background: #0a0a15; padding: 30px; border-radius: 25px; border: 1px solid var(--neon); text-align: center; width: 290px; }
     </style>
@@ -64,38 +57,31 @@
 
     <div id="auth-overlay">
         <div class="card">
-            <h2 style="color: var(--neon); letter-spacing: 2px;">COMMANDER V15.2</h2>
+            <h2 style="color: var(--neon); letter-spacing: 2px;">V15.3 COMMANDER</h2>
             <input type="text" id="nick-in" placeholder="ID OPERADOR">
-            <input type="text" id="room-in" placeholder="NOMBRE CANAL">
+            <input type="text" id="room-in" placeholder="CANAL">
             <input type="password" id="pass-in" placeholder="CLAVE E2EE">
-            <button onclick="startApp()" style="width:100%; padding:15px; background:var(--neon); border:none; border-radius:12px; margin-top:15px; font-weight:bold; cursor:pointer; color:black;">ENTRAR EN FRECUENCIA</button>
-            <p style="font-size: 8px; color: #444; margin-top: 20px; text-align: justify;">
-                AVISO: Proyecto educativo. No para emergencias reales. Cifrado AES-GCM extremo a extremo activo.
-            </p>
+            <button onclick="startApp()" style="width:100%; padding:15px; background:var(--neon); border:none; border-radius:12px; margin-top:15px; font-weight:bold; cursor:pointer;">CONECTAR</button>
         </div>
     </div>
 
     <div class="glass-container">
         <header>
-            <button onclick="toggleUsers()" style="background:none; border:none; color:var(--neon); font-size:10px; cursor:pointer; font-weight:bold;">[ OPERADORES ]</button>
-            <span id="room-disp" style="font-size:12px; font-weight:bold; color:#888;">CANAL: ---</span>
+            <button onclick="toggleUsers()" style="background:none; border:none; color:var(--neon); font-size:10px; cursor:pointer;">[ OPERADORES ]</button>
+            <span id="room-disp" style="font-size:12px; color:#888;">CANAL: ---</span>
             <button id="sos-trigger" style="background:#400; color:var(--sos); border:1px solid var(--sos); border-radius:10px; padding:6px 12px; font-weight:bold; cursor:pointer;">⚠️ SOS</button>
         </header>
 
         <div id="user-list-box">
-            <h4 style="margin:0 0 10px 0; font-size:10px; color:#555;">EN FRECUENCIA:</h4>
-            <div id="user-names" style="color:var(--neon); font-size:13px; line-height:1.5;"></div>
+            <h4 style="margin:0; font-size:10px;">EN FRECUENCIA:</h4>
+            <div id="user-names" style="color:var(--neon); font-size:13px;"></div>
         </div>
 
         <div id="chat"></div>
-        
-        <div class="viz-box">
-            <div id="voice-id">RECEPTOR: IDLE</div>
-            <canvas id="visualizer"></canvas>
-        </div>
+        <div class="viz-box"><div id="voice-id">RECEPTOR: IDLE</div><canvas id="visualizer"></canvas></div>
 
         <div class="input-bar">
-            <input type="text" id="msg-in" placeholder="Escribir comms..." onkeydown="if(event.key==='Enter') send()">
+            <input type="text" id="msg-in" placeholder="Escribir..." onkeydown="if(event.key==='Enter') send()">
             <button onclick="send()" style="background:var(--neon); border:none; border-radius:15px; width:50px; cursor:pointer; font-weight:bold;">></button>
         </div>
 
@@ -105,22 +91,21 @@
     </div>
 
     <script>
-        // --- CAMBIA ESTA URL POR TU TÚNEL O DOMINIO ---
         const SERVER = "https://indication-viii-coalition-litigation.trycloudflare.com"; 
         const socket = io(SERVER, { transports: ['polling'] });
 
-        // Inicialización Global de Audio (Blindado contra TypeError)
+        // Inicialización de Audio Blindada
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         const analyser = audioCtx.createAnalyser();
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         let cryptoKey, isMicLocked = false, sosTimer;
 
-        // MOTOR E2EE
+        // Motor de Cifrado
         async function deriveKey(p) {
             const enc = new TextEncoder();
             const bk = await crypto.subtle.importKey("raw", enc.encode(p), "PBKDF2", false, ["deriveKey"]);
             return crypto.subtle.deriveKey(
-                { name: "PBKDF2", salt: enc.encode("v15-salt-v2"), iterations: 100000, hash: "SHA-256" },
+                { name: "PBKDF2", salt: enc.encode("v15-salt-v3"), iterations: 100000, hash: "SHA-256" },
                 bk, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]
             );
         }
@@ -151,7 +136,8 @@
         socket.on('joined-success', d => { 
             document.getElementById('auth-overlay').style.display='none'; 
             document.getElementById('room-disp').innerText = d.roomName.toUpperCase(); 
-            initVisualizer(); 
+            analyser.fftSize = 64;
+            draw(); 
         });
 
         function toggleUsers() {
@@ -163,30 +149,24 @@
             document.getElementById('user-names').innerHTML = list.map(u => `• ${u}`).join('<br>');
         });
 
-        // SOS TÁCTICO
         const sosBtn = document.getElementById('sos-trigger');
         sosBtn.onmousedown = sosBtn.ontouchstart = (e) => {
             if(e.cancelable) e.preventDefault();
             sosTimer = setTimeout(() => {
-                navigator.geolocation.getCurrentPosition(
-                    p => socket.emit('sos-alert', `${p.coords.latitude},${p.coords.longitude}`), 
-                    () => socket.emit('sos-alert', null)
-                );
+                navigator.geolocation.getCurrentPosition(p => socket.emit('sos-alert', `${p.coords.latitude},${p.coords.longitude}`), () => socket.emit('sos-alert', null));
             }, 2500);
         };
         sosBtn.onmouseup = sosBtn.ontouchend = () => clearTimeout(sosTimer);
 
         socket.on('sos-activated', d => {
             document.body.classList.add('sos-active');
-            playTone(850, 1.2);
-            if(navigator.vibrate) navigator.vibrate([300, 100, 300]);
+            playTone(850, 1);
             const chat = document.getElementById('chat'); 
-            chat.innerHTML += `<div class="msg" style="border-left-color:red; background:rgba(255,0,0,0.1)"><b>⚠️ ALERTA SOS: ${d.user}</b><br>${d.coords || 'Ubicación no disponible'}</div>`;
+            chat.innerHTML += `<div class="msg" style="border-left-color:red"><b>⚠️ SOS: ${d.user}</b><br>${d.coords || 'Sin GPS'}</div>`;
             chat.scrollTop = chat.scrollHeight;
             setTimeout(() => document.body.classList.remove('sos-active'), 4000);
         });
 
-        // GESTIÓN DE CANAL (TURNOS)
         socket.on('channel-busy', u => { 
             const b = document.getElementById('talk-btn'); 
             b.innerText = "OCUPADO: " + u; 
@@ -204,29 +184,20 @@
 
         function playTone(freq, dur) { 
             try {
-                const o = audioCtx.createOscillator(); 
-                const g = audioCtx.createGain(); 
-                o.frequency.value = freq; 
-                g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur); 
-                o.connect(g); g.connect(audioCtx.destination); 
-                o.start(); o.stop(audioCtx.currentTime + dur); 
+                const o = audioCtx.createOscillator(); const g = audioCtx.createGain(); 
+                o.frequency.value = freq; g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur); 
+                o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime + dur); 
             } catch(e){}
-        }
-
-        function initVisualizer() {
-            analyser.fftSize = 64; 
-            draw();
         }
 
         function draw() {
             requestAnimationFrame(draw);
             analyser.getByteFrequencyData(dataArray);
-            const c = document.getElementById('visualizer'); 
-            const ctx = c.getContext('2d');
+            const c = document.getElementById('visualizer'); const ctx = c.getContext('2d');
             ctx.clearRect(0,0,c.width, c.height);
             dataArray.forEach((v, i) => { 
                 ctx.fillStyle = `rgba(0,255,65,${v/255 + 0.1})`; 
-                ctx.fillRect(i*12, c.height-(v/2.2), 10, v/2.2); 
+                ctx.fillRect(i*12, c.height-(v/2), 10, v/2); 
             });
         }
 
@@ -242,11 +213,12 @@
             }
         });
 
-        // MICRÓFONO CON NOISE GATE
+        // Configuración de Micro con Noise Gate
         navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
             const btn = document.getElementById('talk-btn');
             let rec;
             
+            // Detección de silencio (Noise Gate)
             const source = audioCtx.createMediaStreamSource(stream);
             const processor = audioCtx.createScriptProcessor(2048, 1, 1);
             processor.onaudioprocess = (e) => {
@@ -255,7 +227,7 @@
                 for (let i = 0; i < input.length; i++) sum += input[i] * input[i];
                 window.isQuiet = Math.sqrt(sum / input.length) < 0.012;
             };
-            source.connect(processor);
+            source.connect(processor); // Nota: ScriptProcessor necesita conexión a destino para disparar onaudioprocess
             processor.connect(audioCtx.destination);
 
             btn.onmousedown = btn.ontouchstart = (e) => {
@@ -266,8 +238,7 @@
             };
 
             socket.on('mic-granted', () => {
-                btn.classList.add('recording'); 
-                btn.innerText = "TRANSMITIENDO...";
+                btn.classList.add('recording'); btn.innerText = "TRANSMITIENDO...";
                 rec = new MediaRecorder(stream);
                 rec.ondataavailable = async ev => {
                     if (window.isQuiet) return;
@@ -279,14 +250,9 @@
 
             btn.onmouseup = btn.ontouchend = btn.onmouseleave = () => {
                 if(rec && rec.state !== 'inactive') { 
-                    rec.stop(); 
-                    socket.emit('release-mic'); 
-                    btn.classList.remove('recording'); 
+                    rec.stop(); socket.emit('release-mic'); btn.classList.remove('recording'); 
                 }
             };
-        }).catch(err => {
-            console.error(err);
-            alert("Acceso al micrófono denegado. Revisa los permisos.");
         });
 
         function send() { 
@@ -296,11 +262,9 @@
 
         socket.on('chat-message', d => { 
             const chat = document.getElementById('chat'); 
-            const div = document.createElement('div'); 
-            div.className='msg'; 
+            const div = document.createElement('div'); div.className='msg'; 
             div.innerHTML=`<b style="color:var(--neon)">${d.user}:</b> ${d.text}`; 
-            chat.appendChild(div); 
-            chat.scrollTop = chat.scrollHeight; 
+            chat.appendChild(div); chat.scrollTop = chat.scrollHeight; 
         });
     </script>
 </body>
