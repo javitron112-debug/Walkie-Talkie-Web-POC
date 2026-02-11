@@ -11,13 +11,11 @@
         body { margin: 0; background: #07070c; color: white; font-family: sans-serif; display: flex; justify-content: center; height: 100vh; overflow: hidden; }
         .glass-container { width: 95%; max-width: 450px; height: 95vh; background: var(--glass); backdrop-filter: blur(25px); border-radius: 35px; border: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; padding: 20px; box-sizing: border-box; margin-top: 10px; position: relative; }
         header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid #333; }
-        #chat { flex: 1; overflow-y: auto; margin: 10px 0; font-size: 13px; }
-        .msg { background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 12px; border-left: 3px solid var(--neon); margin-bottom: 5px; }
-        .viz-box { height: 60px; background: rgba(0,0,0,0.5); border-radius: 18px; position: relative; overflow: hidden; border: 2px solid var(--neon); }
-        #voice-id { position: absolute; top: 5px; left: 10px; font-size: 9px; color: var(--neon); font-weight: bold; }
-        .input-bar { display: flex; gap: 8px; margin: 10px 0; }
-        input { background: #111; border: 1px solid #333; color: white; padding: 12px; border-radius: 15px; outline: none; width: 100%; }
-        #talk-btn { width: 100%; padding: 22px; border-radius: 25px; border: none; background: linear-gradient(135deg, #e74c3c, var(--sos)); color: white; font-weight: 900; font-size: 18px; cursor: pointer; touch-action: none; user-select: none; }
+        #chat { flex: 1; overflow-y: auto; margin: 10px 0; font-size: 13px; display: flex; flex-direction: column; gap: 5px; }
+        .msg { background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 12px; border-left: 3px solid var(--neon); }
+        .viz-box { height: 80px; background: #000; border-radius: 18px; position: relative; overflow: hidden; border: 2px solid #333; }
+        canvas { width: 100%; height: 100%; display: block; }
+        #talk-btn { width: 100%; padding: 25px; border-radius: 25px; border: none; background: linear-gradient(135deg, #e74c3c, var(--sos)); color: white; font-weight: 900; font-size: 18px; cursor: pointer; touch-action: none; }
         #talk-btn.recording { filter: brightness(1.3); animation: pulse 0.8s infinite; }
         @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(0.97); } 100% { transform: scale(1); } }
         #auth-overlay { position: fixed; inset: 0; background: #000; display: flex; justify-content: center; align-items: center; z-index: 1000; }
@@ -28,7 +26,7 @@
 
     <div id="auth-overlay">
         <div class="card">
-            <h2 style="color: var(--neon);">V15.9 STABLE</h2>
+            <h2 style="color: var(--neon);">V15.9 RADIO FIX</h2>
             <input type="text" id="nick-in" placeholder="ID OPERADOR">
             <input type="text" id="room-in" placeholder="CANAL">
             <input type="password" id="pass-in" placeholder="CLAVE E2EE">
@@ -39,137 +37,111 @@
     <div class="glass-container">
         <header>
             <span id="room-disp">CANAL: ---</span>
-            <button id="sos-trigger" style="background:#400; color:red; border:1px solid red; border-radius:10px; padding:5px 10px;">⚠️ SOS</button>
+            <span id="hw-status" style="font-size: 9px; color: #555;">MIC: OFFLINE</span>
         </header>
         <div id="chat"></div>
-        <div class="viz-box"><div id="voice-id">STATUS: READY</div><canvas id="visualizer"></canvas></div>
-        <div class="input-bar">
-            <input type="text" id="msg-in" placeholder="Escribir..." onkeydown="if(event.key==='Enter') send()">
-            <button onclick="send()" style="background:var(--neon); border:none; border-radius:15px; width:50px;">></button>
-        </div>
-        <div style="padding-bottom:20px;"><button id="talk-btn">HABLAR</button></div>
+        <div class="viz-box"><canvas id="visualizer"></canvas></div>
+        <div style="padding: 15px 0;"><button id="talk-btn">PULSAR PARA HABLAR</button></div>
     </div>
 
     <script>
         const SERVER = "https://subsection-aye-jpeg-paragraphs.trycloudflare.com"; 
         const socket = io(SERVER, { transports: ['polling'] });
 
-        let audioCtx, analyser, dataArray, cryptoKey, isMicLocked = false;
+        let audioCtx, analyser, dataArray, cryptoKey, micStream;
 
         async function deriveKey(p) {
             const enc = new TextEncoder();
             const bk = await crypto.subtle.importKey("raw", enc.encode(p), "PBKDF2", false, ["deriveKey"]);
-            return crypto.subtle.deriveKey(
-                { name: "PBKDF2", salt: enc.encode("v15-9-salt"), iterations: 100000, hash: "SHA-256" },
-                bk, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]
-            );
-        }
-
-        async function encrypt(d) {
-            const iv = crypto.getRandomValues(new Uint8Array(12));
-            const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, cryptoKey, d);
-            return { iv: Array.from(iv), ciphertext: Array.from(new Uint8Array(ct)) };
-        }
-
-        async function decrypt(iv, d) {
-            try { 
-                return await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(iv) }, cryptoKey, new Uint8Array(d)); 
-            } catch(e) { 
-                console.error("Error descifrando: Clave incorrecta o datos corruptos");
-                return null; 
-            }
+            return crypto.subtle.deriveKey({ name: "PBKDF2", salt: enc.encode("v15-9-salt"), iterations: 100000, hash: "SHA-256" }, bk, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
         }
 
         async function startApp() {
+            // Inicializar AudioContext por interacción
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             analyser = audioCtx.createAnalyser();
-            analyser.fftSize = 64;
+            analyser.fftSize = 32;
             dataArray = new Uint8Array(analyser.frequencyBinCount);
             
             const p = document.getElementById('pass-in').value;
             cryptoKey = await deriveKey(p);
-            socket.emit('join-room', { nickname: document.getElementById('nick-in').value, roomName: document.getElementById('room-in').value, password: p });
+            socket.emit('join-room', { 
+                nickname: document.getElementById('nick-in').value, 
+                roomName: document.getElementById('room-in').value, 
+                password: p 
+            });
         }
 
-        socket.on('joined-success', d => { 
-            document.getElementById('auth-overlay').style.display='none'; 
-            document.getElementById('room-disp').innerText = d.roomName.toUpperCase(); 
-            draw(); 
+        socket.on('joined-success', d => {
+            document.getElementById('auth-overlay').style.display = 'none';
+            document.getElementById('room-disp').innerText = d.roomName.toUpperCase();
+            initMic();
+            draw();
         });
 
-        socket.on('audio-stream', async d => {
-            const dec = await decrypt(d.buffer.iv, d.buffer.ciphertext);
-            if(dec && dec.byteLength > 100) { // Ignorar paquetes demasiado pequeños
-                if(audioCtx.state === 'suspended') audioCtx.resume();
-                document.getElementById('voice-id').innerText = "RECIBIENDO: " + d.user;
+        function initMic() {
+            navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+                micStream = stream;
+                document.getElementById('hw-status').innerText = "MIC: ONLINE";
+                document.getElementById('hw-status').style.color = "var(--neon)";
                 
-                try {
-                    const blob = new Blob([dec], { type: 'audio/webm; codecs=opus' });
-                    const url = URL.createObjectURL(blob);
-                    const audio = new Audio();
-                    audio.src = url;
-                    
-                    const src = audioCtx.createMediaElementSource(audio);
-                    src.connect(analyser);
-                    analyser.connect(audioCtx.destination);
-                    
-                    audio.play().catch(e => {
-                        // Aquí capturamos el NotSupportedError y evitamos que rompa la app
-                    });
-                    
-                    audio.onended = () => {
-                        document.getElementById('voice-id').innerText = "STATUS: READY";
-                        URL.revokeObjectURL(url);
-                    };
-                } catch(e) {}
-            }
-        });
+                // Conectamos el micro al analizador para ver barras verdes LOCALES
+                const source = audioCtx.createMediaStreamSource(stream);
+                source.connect(analyser);
+                
+                const btn = document.getElementById('talk-btn');
+                let rec;
 
-        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-            const btn = document.getElementById('talk-btn');
-            let rec;
-
-            btn.onmousedown = btn.ontouchstart = (e) => {
-                if(e.cancelable) e.preventDefault();
-                if(isMicLocked || !audioCtx) return;
-                audioCtx.resume();
-                socket.emit('request-mic');
-            };
-
-            socket.on('mic-granted', () => {
-                btn.classList.add('recording');
-                // IMPORTANTE: MIME Type explícito
-                rec = new MediaRecorder(stream, { mimeType: 'audio/webm; codecs=opus' });
-                rec.ondataavailable = async ev => {
-                    if (ev.data.size > 0) {
+                btn.onmousedown = btn.ontouchstart = (e) => {
+                    if(e.cancelable) e.preventDefault();
+                    if(audioCtx.state === 'suspended') audioCtx.resume();
+                    btn.classList.add('recording');
+                    
+                    rec = new MediaRecorder(stream);
+                    rec.ondataavailable = async ev => {
                         const buffer = await ev.data.arrayBuffer();
-                        const enc = await encrypt(buffer);
-                        socket.emit('audio-chunk', enc);
+                        const iv = crypto.getRandomValues(new Uint8Array(12));
+                        const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, cryptoKey, buffer);
+                        socket.emit('audio-chunk', { iv: Array.from(iv), ciphertext: Array.from(new Uint8Array(ct)) });
+                    };
+                    rec.start(200);
+                };
+
+                btn.onmouseup = btn.ontouchend = btn.onmouseleave = () => {
+                    if(rec && rec.state !== 'inactive') {
+                        rec.stop();
+                        btn.classList.remove('recording');
                     }
                 };
-                // Enviar cada 500ms para asegurar que el chunk tenga datos suficientes
-                rec.start(500); 
+            }).catch(err => {
+                alert("Error de micrófono: " + err.message);
             });
+        }
 
-            btn.onmouseup = btn.ontouchend = btn.onmouseleave = () => {
-                if(rec && rec.state !== 'inactive') { 
-                    rec.stop(); 
-                    socket.emit('release-mic'); 
-                    btn.classList.remove('recording'); 
-                }
-            };
+        socket.on('audio-stream', async d => {
+            try {
+                const dec = await crypto.subtle.decrypt(
+                    { name: "AES-GCM", iv: new Uint8Array(d.buffer.iv) }, 
+                    cryptoKey, new Uint8Array(d.buffer.ciphertext)
+                );
+                const audio = new Audio(URL.createObjectURL(new Blob([dec], {type:'audio/webm'})));
+                audio.play();
+            } catch(e) { console.error("Error descifrado/play"); }
         });
 
         function draw() {
             requestAnimationFrame(draw);
-            if(!analyser) return;
             analyser.getByteFrequencyData(dataArray);
             const c = document.getElementById('visualizer');
             const ctx = c.getContext('2d');
             ctx.clearRect(0,0,c.width, c.height);
-            dataArray.forEach((v, i) => {
-                ctx.fillStyle = `rgba(0,255,65,${v/255 + 0.1})`;
-                ctx.fillRect(i*12, c.height-(v/2), 10, v/2);
+            
+            let barWidth = (c.width / dataArray.length) * 2;
+            let x = 0;
+            dataArray.forEach(v => {
+                ctx.fillStyle = `rgb(0, ${v + 100}, 65)`;
+                ctx.fillRect(x, c.height - (v/2), barWidth - 2, v/2);
+                x += barWidth;
             });
         }
 
@@ -180,15 +152,10 @@
 
         socket.on('chat-message', d => { 
             const chat = document.getElementById('chat'); 
-            const div = document.createElement('div'); 
-            div.className='msg'; 
+            const div = document.createElement('div'); div.className='msg'; 
             div.innerHTML=`<b>${d.user}:</b> ${d.text}`; 
-            chat.appendChild(div); 
-            chat.scrollTop = chat.scrollHeight; 
+            chat.appendChild(div); chat.scrollTop = chat.scrollHeight; 
         });
-
-        socket.on('channel-busy', u => { isMicLocked = true; document.getElementById('talk-btn').innerText = "OCUPADO"; });
-        socket.on('channel-free', () => { isMicLocked = false; document.getElementById('talk-btn').innerText = "HABLAR"; });
     </script>
 </body>
 </html>
