@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="icon" href="data:;base64,iVBORw0KGgo=">
-    <title>PHANTOM V16.9.3</title>
+    <title>PHANTOM V16.9.4</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         :root { --neon: #00ff41; --sos: #ff3131; --ptt-orange: #ff8c00; --bg: #07070c; }
@@ -14,7 +14,6 @@
         .led-box { display: flex; align-items: center; gap: 8px; font-size: 10px; }
         #status-led { width: 10px; height: 10px; background: var(--neon); border-radius: 50%; box-shadow: 0 0 8px var(--neon); }
         .busy-led { background: var(--sos) !important; box-shadow: 0 0 12px var(--sos) !important; }
-        #latency-tag { font-size: 9px; font-family: monospace; color: var(--neon); }
         #chat { flex: 1; overflow-y: auto; margin-bottom: 10px; font-size: 13px; scroll-behavior: smooth; }
         .msg { background: #111; padding: 10px; border-radius: 10px; margin-bottom: 8px; border-left: 3px solid var(--neon); }
         .viz-box { height: 70px; background: #000; border-radius: 15px; margin-bottom: 10px; border: 1px solid #444; overflow: hidden; position: relative; }
@@ -24,16 +23,15 @@
         #auth-overlay { position: fixed; inset: 0; background: #000; display: flex; justify-content: center; align-items: center; z-index: 1000; }
         .card { background: #111; padding: 30px; border-radius: 25px; border: 1px solid var(--neon); text-align: center; width: 280px; }
         input { background: #000; border: 1px solid #333; color: white; padding: 12px; border-radius: 12px; width: 90%; margin-bottom: 10px; outline: none; }
-        input:focus { border-color: var(--neon); }
     </style>
 </head>
 <body>
 
     <div id="auth-overlay">
         <form class="card" onsubmit="event.preventDefault(); startApp();" autocomplete="on">
-            <h2 style="color: var(--neon);">PHANTOM V16.9.3</h2>
+            <h2 style="color: var(--neon);">PHANTOM V16.9.4</h2>
             <input type="text" id="nick-in" placeholder="ID OPERADOR" autocomplete="username" required>
-            <input type="text" id="room-in" placeholder="CANAL" autocomplete="section-channel" required>
+            <input type="text" id="room-in" placeholder="CANAL" autocomplete="off" required>
             <input type="password" id="pass-in" placeholder="CLAVE E2EE" autocomplete="current-password" required>
             <button type="submit" style="width:100%; padding:15px; background:var(--neon); border:none; border-radius:12px; margin-top:10px; font-weight:bold; cursor:pointer; color:black;">CONECTAR</button>
         </form>
@@ -45,7 +43,7 @@
                 <div id="status-led"></div>
                 <button id="user-toggle" onclick="toggleUsers()" style="background:none;border:none;color:#888;font-size:10px;text-decoration:underline;cursor:pointer;">OPERADORES: 0</button>
             </div>
-            <div id="latency-tag">LAT: -- ms</div>
+            <div id="latency-tag" style="font-size: 9px; font-family: monospace; color: var(--neon);">LAT: -- ms</div>
             <button class="sos-btn" onclick="sendSOS()" style="background:#400;color:var(--sos);border:1px solid var(--sos);padding:8px 15px;border-radius:10px;font-weight:bold;cursor:pointer;font-size:12px;">⚠️ SOS</button>
         </header>
 
@@ -57,7 +55,7 @@
         <div class="viz-box"><div id="mode-id">IDLE</div><canvas id="visualizer"></canvas></div>
         
         <div style="display:flex; gap:8px; margin-bottom:10px;">
-            <input type="text" id="msg-in" placeholder="Mensaje..." onkeydown="if(event.key==='Enter') sendMsg()" style="flex:1; margin-bottom:0;" autocomplete="off">
+            <input type="text" id="msg-in" placeholder="Mensaje..." onkeydown="if(event.key==='Enter') sendMsg()" style="flex:1; margin-bottom:0;">
             <button onclick="sendMsg()" style="background:var(--neon);border:none;border-radius:10px;width:45px;font-weight:bold;color:black;">></button>
         </div>
         
@@ -78,7 +76,7 @@
         }
 
         async function startApp() {
-            // FORCE AUDIO RESUME: Vital para navegadores móviles
+            // Inicializar AudioContext inmediatamente al pulsar el botón de login
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 mainGain = audioCtx.createGain(); 
@@ -104,9 +102,8 @@
             setInterval(() => {
                 const start = Date.now();
                 socket.emit("ping_check", () => {
-                    const latency = Date.now() - start;
                     const tag = document.getElementById("latency-tag");
-                    if(tag) tag.innerText = `LAT: ${latency} ms`;
+                    if(tag) tag.innerText = `LAT: ${Date.now() - start} ms`;
                 });
             }, 3000);
         }
@@ -138,7 +135,7 @@
                     if(isMicLocked) return;
                     if(audioCtx.state === 'suspended') await audioCtx.resume();
                     
-                    mainGain.gain.setValueAtTime(0, audioCtx.currentTime); // Anti-feedback
+                    mainGain.gain.setValueAtTime(0, audioCtx.currentTime); // Silencio local
                     micSource.connect(analyser); 
                     socket.emit('request-mic');
                     btn.classList.add('active');
@@ -161,7 +158,7 @@
                         socket.emit('release-mic'); 
                         btn.classList.remove('active');
                         micSource.disconnect(analyser); 
-                        mainGain.gain.setValueAtTime(1, audioCtx.currentTime);
+                        mainGain.gain.setValueAtTime(1, audioCtx.currentTime); // Restaurar salida
                     }
                 };
 
@@ -170,23 +167,35 @@
                 btn.addEventListener('mouseup', stopPTT);
                 btn.addEventListener('touchend', stopPTT);
                 btn.addEventListener('mouseleave', stopPTT);
-            }).catch(err => alert("Error acceso micro: " + err));
+            });
         }
 
         socket.on('audio-stream', async d => {
             try {
+                // IMPORTANTÍSIMO: Asegurar que el contexto está vivo al recibir
                 if (audioCtx.state === 'suspended') await audioCtx.resume();
                 
                 const dec = await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(d.buffer.iv) }, cryptoKey, new Uint8Array(d.buffer.ciphertext));
                 const audioBlob = new Blob([dec], { type: 'audio/webm;codecs=opus' });
-                const audio = new Audio(URL.createObjectURL(audioBlob));
+                const url = URL.createObjectURL(audioBlob);
                 
+                // MODO REPRODUCCIÓN FORZADA:
+                const audio = new Audio();
+                audio.src = url;
+                audio.crossOrigin = "anonymous";
+                
+                // Vincular al gráfico de audio para el visualizador
                 const audioSrc = audioCtx.createMediaElementSource(audio);
                 audioSrc.connect(analyser); 
-                analyser.connect(mainGain); 
+                analyser.connect(mainGain); // mainGain está conectado a audioCtx.destination
                 
-                audio.play().catch(e => console.warn("Auto-play bloqueado:", e));
-            } catch(e) { console.error("Fallo de audio/descifrado:", e); }
+                const playPromise = audio.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(error => {
+                        console.warn("Reproducción bloqueada por el navegador. Interactúa con la página.");
+                    });
+                }
+            } catch(e) { console.error("Error en RX:", e); }
         });
 
         socket.on('channel-busy', user => {
