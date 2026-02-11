@@ -3,182 +3,212 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Radio Pro E2EE | V14</title>
+    <title>SECURE COMMS V14.5</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        :root { --neon: #00ff41; --glass: rgba(255, 255, 255, 0.08); --error: #ff3131; }
+        :root { --neon: #00ff41; --glass: rgba(255, 255, 255, 0.08); --sos: #ff3131; }
         body { 
             margin: 0; background: #07070c; color: white; 
             font-family: 'Segoe UI', sans-serif; display: flex; 
-            justify-content: center; align-items: center; height: 100vh; overflow: hidden;
-            transition: background 0.3s;
+            justify-content: center; height: 100vh; overflow: hidden;
         }
         .glass-container {
-            width: 95%; max-width: 400px; height: 92vh;
+            width: 95%; max-width: 450px; height: 95vh;
             background: var(--glass); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
-            border-radius: 30px; border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 35px; border: 1px solid rgba(255,255,255,0.1);
             display: flex; flex-direction: column; padding: 20px; box-sizing: border-box;
+            margin-top: 10px;
         }
-        header { display: flex; justify-content: space-between; font-size: 10px; border-bottom: 1px solid #333; padding-bottom: 10px; }
+
+        /* HEADER & SOS */
+        header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid #333; }
+        .sos-btn-top { 
+            background: #400; color: var(--sos); border: 1px solid var(--sos); 
+            padding: 8px 15px; border-radius: 12px; font-weight: 900; 
+            cursor: pointer; font-size: 14px;
+        }
+        .sos-btn-top:active { background: var(--sos); color: white; }
+
+        /* USER LIST DROP-DOWN */
+        #user-list-box {
+            position: absolute; top: 70px; left: 20px; right: 20px;
+            background: rgba(10,10,20,0.95); border: 1px solid #333;
+            border-radius: 15px; padding: 15px; z-index: 50; display: none;
+        }
+
+        /* CHAT AREA */
         #chat { flex: 1; overflow-y: auto; margin: 10px 0; font-size: 13px; display: flex; flex-direction: column; gap: 5px; }
-        .viz-box { height: 60px; background: rgba(0,0,0,0.5); border-radius: 15px; position: relative; overflow: hidden; }
-        canvas { width: 100%; height: 100%; }
-        #voice-id { position: absolute; top: 5px; left: 10px; font-size: 9px; color: #555; font-weight: bold; }
-        input { background: #111; border: 1px solid #333; color: white; padding: 12px; border-radius: 10px; margin: 5px 0; outline: none; }
+        .msg { background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 12px; border-left: 3px solid var(--neon); }
+        
+        /* WAVE VISUALIZER */
+        .viz-box { height: 60px; background: rgba(0,0,0,0.5); border-radius: 18px; position: relative; overflow: hidden; }
+        #voice-id { position: absolute; top: 5px; left: 10px; font-size: 9px; color: #555; }
+        
+        /* INPUT AREA */
+        .input-bar { display: flex; gap: 8px; margin: 10px 0; }
+        input { background: #111; border: 1px solid #333; color: white; padding: 14px; border-radius: 15px; outline: none; }
+
+        /* PTT BUTTON - SPACED FOR MOBILE */
+        .ptt-container { padding-bottom: 30px; } /* Aire abajo para móviles */
         #talk-btn {
-            width: 100%; padding: 20px; border-radius: 15px; border: none;
-            background: linear-gradient(135deg, #e74c3c, var(--error));
-            color: white; font-weight: 800; cursor: pointer; touch-action: none; user-select: none;
+            width: 100%; padding: 25px; border-radius: 25px; border: none;
+            background: linear-gradient(135deg, #e74c3c, var(--sos));
+            color: white; font-weight: 900; font-size: 18px; letter-spacing: 2px;
+            cursor: pointer; touch-action: none; user-select: none;
+            box-shadow: 0 8px 25px rgba(255, 49, 49, 0.4);
         }
-        #talk-btn.recording { animation: pulse 1s infinite; filter: brightness(1.2); }
-        .sos-btn { background: #300; color: var(--error); border: 1px solid var(--error); padding: 8px; border-radius: 10px; margin-top: 8px; font-size: 11px; font-weight: bold; cursor: pointer; }
-        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(0.98); } 100% { transform: scale(1); } }
-        .sos-active { background: #600 !important; animation: emergency 0.4s infinite; }
-        @keyframes emergency { 0% { opacity: 1; } 50% { opacity: 0.7; } }
+        #talk-btn.recording { filter: brightness(1.3); animation: pulse 0.8s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(0.98); } }
+
+        /* SOS ANIMATION */
+        .sos-active-screen { animation: screen-red 0.3s infinite; }
+        @keyframes screen-red { 0% { background: #07070c; } 50% { background: #600; } }
+
         #auth-overlay { position: fixed; inset: 0; background: #000; display: flex; justify-content: center; align-items: center; z-index: 1000; }
         .card { background: #0a0a15; padding: 30px; border-radius: 25px; border: 1px solid var(--neon); text-align: center; width: 280px; }
-        .saver canvas { display: none; }
     </style>
 </head>
 <body id="b-main">
 
     <div id="auth-overlay">
         <div class="card">
-            <h2 style="color: var(--neon); letter-spacing: 2px;">SECURE RADIO</h2>
+            <h2 style="color: var(--neon); letter-spacing: 2px;">V14.5 SECURE</h2>
             <input type="text" id="nick-in" placeholder="ID OPERADOR">
             <input type="text" id="room-in" placeholder="CANAL">
             <input type="password" id="pass-in" placeholder="CLAVE E2EE">
-            <button onclick="startApp()" style="width:100%; padding:15px; background:var(--neon); border:none; border-radius:10px; margin-top:15px; font-weight:bold; cursor:pointer;">CONECTAR</button>
-            <p style="font-size: 8px; color: #555; margin-top: 20px; text-align: justify;">
-                AVISO: Proyecto educativo. No para uso en emergencias reales. El cifrado es extremo a extremo.
-            </p>
+            <button onclick="startApp()" style="width:100%; padding:15px; background:var(--neon); border:none; border-radius:12px; margin-top:15px; font-weight:bold; cursor:pointer;">CONECTAR</button>
+            <p style="font-size: 9px; color: #444; margin-top: 15px; text-align: justify;">Esta app es para pruebas técnicas. El desarrollador no se responsabiliza de su uso. Al conectar acepta los términos.</p>
         </div>
     </div>
 
     <div class="glass-container">
         <header>
-            <span id="sig">LATENCIA: --ms</span>
-            <span id="room-disp">CANAL: ---</span>
-            <button onclick="document.body.classList.toggle('saver')" style="background:none; border:none; color:#555; font-size:12px; cursor:pointer;">🔋</button>
+            <button onclick="toggleUsers()" style="background:none; border:none; color:var(--neon); font-size:10px; cursor:pointer;">[ OPERADORES ]</button>
+            <span id="room-disp" style="font-weight:bold; font-size:12px;">CANAL: ---</span>
+            <button id="sos-trigger" class="sos-btn-top">⚠️ SOS</button>
         </header>
+
+        <div id="user-list-box">
+            <h4 style="margin:0 0 10px 0; font-size:10px; color:#888;">EN FRECUENCIA:</h4>
+            <div id="user-names" style="color:var(--neon); font-size:13px;"></div>
+        </div>
+        
         <div id="chat"></div>
+        
         <div class="viz-box">
             <div id="voice-id">RECEPTOR: IDLE</div>
             <canvas id="visualizer"></canvas>
         </div>
-        <div style="display:flex; gap:5px; margin: 10px 0;">
-            <input type="text" id="msg-in" style="flex:1;" placeholder="Comms...">
-            <button onclick="send()" style="background:var(--neon); border:none; border-radius:10px; width:45px; cursor:pointer; font-weight:bold;">></button>
+
+        <div class="input-bar">
+            <input type="text" id="msg-in" style="flex:1;" placeholder="Escribir mensaje..." onkeydown="if(event.key==='Enter') send()">
+            <button onclick="send()" style="background:var(--neon); border:none; border-radius:15px; width:50px; font-weight:bold; cursor:pointer;">></button>
         </div>
-        <button id="talk-btn">PULSAR PARA HABLAR</button>
-        <button id="sos-btn" class="sos-btn">SOS (MANTENER 3s)</button>
+
+        <div class="ptt-container">
+            <button id="talk-btn">HABLAR</button>
+        </div>
     </div>
 
     <script>
-        // --- CAMBIA ESTA URL POR LA DE TU TÚNEL O DOMINIO ---
-        const SERVER = "https://parental-furnishings-tail-loves.trycloudflare.com"; 
-        
+        const SERVER = "https://generic-applying-businesses-measuring.trycloudflare.com"; 
         const socket = io(SERVER, { transports: ['polling'] });
         let audioCtx, analyser, dataArray, cryptoKey, sosTimer;
 
-        // MOTOR E2EE (AES-GCM)
-        async function deriveKey(password) {
+        // E2EE MOTOR
+        async function deriveKey(p) {
             const enc = new TextEncoder();
-            const baseKey = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveKey"]);
+            const bk = await crypto.subtle.importKey("raw", enc.encode(p), "PBKDF2", false, ["deriveKey"]);
             return crypto.subtle.deriveKey(
-                { name: "PBKDF2", salt: enc.encode("radio-salt-v14"), iterations: 100000, hash: "SHA-256" },
-                baseKey, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]
+                { name: "PBKDF2", salt: enc.encode("v14-5-salt"), iterations: 100000, hash: "SHA-256" },
+                bk, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]
             );
         }
 
-        async function encrypt(data) {
+        async function encrypt(d) {
             const iv = crypto.getRandomValues(new Uint8Array(12));
-            const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, cryptoKey, data);
-            return { iv: Array.from(iv), ciphertext: Array.from(new Uint8Array(ciphertext)) };
+            const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, cryptoKey, d);
+            return { iv: Array.from(iv), ciphertext: Array.from(new Uint8Array(ct)) };
         }
 
-        async function decrypt(iv, data) {
-            try {
-                const dec = await crypto.subtle.decrypt(
-                    { name: "AES-GCM", iv: new Uint8Array(iv) }, 
-                    cryptoKey, new Uint8Array(data)
-                );
-                return dec;
-            } catch(e) { return null; }
+        async function decrypt(iv, d) {
+            try { return await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(iv) }, cryptoKey, new Uint8Array(d)); }
+            catch(e) { return null; }
         }
 
         async function startApp() {
-            const pass = document.getElementById('pass-in').value;
-            const nick = document.getElementById('nick-in').value;
-            const room = document.getElementById('room-in').value;
-            if(!pass || !nick || !room) return alert("Faltan datos");
-            
-            cryptoKey = await deriveKey(pass);
-            socket.emit('join-room', { nickname: nick, roomName: room, password: pass });
+            const p = document.getElementById('pass-in').value;
+            const n = document.getElementById('nick-in').value;
+            const r = document.getElementById('room-in').value;
+            if(!p || !n || !r) return;
+            cryptoKey = await deriveKey(p);
+            socket.emit('join-room', { nickname: n, roomName: r, password: p });
         }
 
-        socket.on('joined-success', (d) => {
-            document.getElementById('auth-overlay').style.display = 'none';
+        socket.on('joined-success', d => {
+            document.getElementById('auth-overlay').style.display='none';
             document.getElementById('room-disp').innerText = "CANAL: " + d.roomName.toUpperCase();
             initAudio();
         });
 
-        socket.on('error-msg', (m) => alert(m));
+        function toggleUsers() {
+            const b = document.getElementById('user-list-box');
+            b.style.display = b.style.display === 'none' ? 'block' : 'none';
+        }
 
-        // SOS
-        const sBtn = document.getElementById('sos-btn');
-        const triggerSOS = () => { socket.emit('sos-alert'); alert("ALERTA SOS ENVIADA"); };
-        sBtn.onmousedown = sBtn.ontouchstart = () => sosTimer = setTimeout(triggerSOS, 3000);
-        sBtn.onmouseup = sBtn.ontouchend = () => clearTimeout(sosTimer);
-
-        socket.on('sos-activated', (d) => {
-            document.body.classList.add('sos-active');
-            const beep = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
-            beep.play();
-            setTimeout(() => document.body.classList.remove('sos-active'), 5000);
+        socket.on('user-list', list => {
+            document.getElementById('user-names').innerHTML = list.map(u => `• ${u}`).join('<br>');
         });
 
-        // AUDIO
+        // SOS LÓGICA (Tono fuerte 800Hz)
+        const sosBtn = document.getElementById('sos-trigger');
+        sosBtn.onmousedown = sosBtn.ontouchstart = (e) => {
+            if(e.cancelable) e.preventDefault();
+            sosTimer = setTimeout(() => { socket.emit('sos-alert'); }, 2000);
+        };
+        sosBtn.onmouseup = sosBtn.ontouchend = () => clearTimeout(sosTimer);
+
+        socket.on('sos-activated', d => {
+            document.body.classList.add('sos-active-screen');
+            if(navigator.vibrate) navigator.vibrate([200, 100, 200]);
+            
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sawtooth'; osc.frequency.value = 800;
+            gain.gain.value = 0.3;
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + 1.5);
+
+            setTimeout(() => document.body.classList.remove('sos-active-screen'), 3000);
+        });
+
         function initAudio() {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             analyser = audioCtx.createAnalyser(); analyser.fftSize = 64;
             dataArray = new Uint8Array(analyser.frequencyBinCount);
-            setInterval(() => {
-                const start = Date.now();
-                socket.emit('ping-check');
-                socket.once('pong-check', () => {
-                    const lat = Date.now() - start;
-                    document.getElementById('sig').innerText = `LAT: ${lat}ms`;
-                    document.getElementById('sig').style.color = lat > 200 ? 'red' : 'var(--neon)';
-                });
-            }, 4000);
             draw();
         }
 
         function draw() {
-            requestAnimationFrame(draw);
-            if(!analyser) return;
+            requestAnimationFrame(draw); if(!analyser) return;
             analyser.getByteFrequencyData(dataArray);
             const canvas = document.getElementById('visualizer');
             const ctx = canvas.getContext('2d');
             ctx.clearRect(0,0,canvas.width, canvas.height);
             dataArray.forEach((v, i) => {
                 ctx.fillStyle = `rgba(0,255,65,${v/255})`;
-                ctx.fillRect(i*12, canvas.height - (v/2), 10, v/2);
+                ctx.fillRect(i*12, canvas.height-(v/2), 10, v/2);
             });
         }
 
-        socket.on('audio-stream', async (d) => {
+        socket.on('audio-stream', async d => {
             const dec = await decrypt(d.buffer.iv, d.buffer.ciphertext);
             if(!dec) return;
-            
-            document.getElementById('voice-id').innerText = "RECIBIENDO: " + d.user;
-            const blob = new Blob([dec], {type:'audio/webm; codecs=opus'});
-            const audio = new Audio(URL.createObjectURL(blob));
+            document.getElementById('voice-id').innerText = "RECEPTOR: " + d.user;
+            const audio = new Audio(URL.createObjectURL(new Blob([dec], {type:'audio/webm'})));
             const src = audioCtx.createMediaElementSource(audio);
             src.connect(analyser); analyser.connect(audioCtx.destination);
             audio.play();
-            audio.onended = () => document.getElementById('voice-id').innerText = "RECEPTOR: IDLE";
         });
 
         navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
@@ -190,8 +220,8 @@
                 btn.classList.add('recording');
                 rec = new MediaRecorder(stream);
                 rec.ondataavailable = async ev => {
-                    const encrypted = await encrypt(await ev.data.arrayBuffer());
-                    socket.emit('audio-chunk', encrypted);
+                    const enc = await encrypt(await ev.data.arrayBuffer());
+                    socket.emit('audio-chunk', enc);
                 };
                 rec.start();
             };
@@ -208,9 +238,9 @@
         socket.on('chat-message', d => {
             const c = document.getElementById('chat');
             const div = document.createElement('div');
+            div.className = 'msg';
             div.innerHTML = `<b style="color:var(--neon)">${d.user}:</b> ${d.text}`;
-            c.appendChild(div);
-            c.scrollTop = c.scrollHeight;
+            c.appendChild(div); c.scrollTop = c.scrollHeight;
         });
     </script>
 </body>
