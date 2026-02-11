@@ -4,15 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="icon" href="data:;base64,iVBORw0KGgo=">
-    <title>SECURE COMMS V15.8</title>
+    <title>SECURE COMMS V15.9</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         :root { --neon: #00ff41; --glass: rgba(255, 255, 255, 0.08); --sos: #ff3131; }
         body { margin: 0; background: #07070c; color: white; font-family: sans-serif; display: flex; justify-content: center; height: 100vh; overflow: hidden; }
-        .glass-container { width: 95%; max-width: 450px; height: 95vh; background: var(--glass); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); border-radius: 35px; border: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; padding: 20px; box-sizing: border-box; margin-top: 10px; position: relative; }
+        .glass-container { width: 95%; max-width: 450px; height: 95vh; background: var(--glass); backdrop-filter: blur(25px); border-radius: 35px; border: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; padding: 20px; box-sizing: border-box; margin-top: 10px; position: relative; }
         header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid #333; }
-        #chat { flex: 1; overflow-y: auto; margin: 10px 0; font-size: 13px; display: flex; flex-direction: column; gap: 5px; }
-        .msg { background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 12px; border-left: 3px solid var(--neon); }
+        #chat { flex: 1; overflow-y: auto; margin: 10px 0; font-size: 13px; }
+        .msg { background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 12px; border-left: 3px solid var(--neon); margin-bottom: 5px; }
         .viz-box { height: 60px; background: rgba(0,0,0,0.5); border-radius: 18px; position: relative; overflow: hidden; border: 2px solid var(--neon); }
         #voice-id { position: absolute; top: 5px; left: 10px; font-size: 9px; color: var(--neon); font-weight: bold; }
         .input-bar { display: flex; gap: 8px; margin: 10px 0; }
@@ -21,14 +21,14 @@
         #talk-btn.recording { filter: brightness(1.3); animation: pulse 0.8s infinite; }
         @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(0.97); } 100% { transform: scale(1); } }
         #auth-overlay { position: fixed; inset: 0; background: #000; display: flex; justify-content: center; align-items: center; z-index: 1000; }
-        .card { background: #0a0a15; padding: 30px; border-radius: 25px; border: 1px solid var(--neon); text-align: center; width: 290px; }
+        .card { background: #0a0a15; padding: 30px; border-radius: 25px; border: 1px solid var(--neon); text-align: center; width: 280px; }
     </style>
 </head>
 <body>
 
     <div id="auth-overlay">
         <div class="card">
-            <h2 style="color: var(--neon);">V15.8 AUDIO FIX</h2>
+            <h2 style="color: var(--neon);">V15.9 STABLE</h2>
             <input type="text" id="nick-in" placeholder="ID OPERADOR">
             <input type="text" id="room-in" placeholder="CANAL">
             <input type="password" id="pass-in" placeholder="CLAVE E2EE">
@@ -54,16 +54,15 @@
         const SERVER = "https://indication-viii-coalition-litigation.trycloudflare.com"; 
         const socket = io(SERVER, { transports: ['polling'] });
 
-        // Forzamos el contexto de audio global
-        let audioCtx;
-        let analyser;
-        let dataArray;
-        let cryptoKey, isMicLocked = false;
+        let audioCtx, analyser, dataArray, cryptoKey, isMicLocked = false;
 
         async function deriveKey(p) {
             const enc = new TextEncoder();
             const bk = await crypto.subtle.importKey("raw", enc.encode(p), "PBKDF2", false, ["deriveKey"]);
-            return crypto.subtle.deriveKey({ name: "PBKDF2", salt: enc.encode("v15-8-salt"), iterations: 100000, hash: "SHA-256" }, bk, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+            return crypto.subtle.deriveKey(
+                { name: "PBKDF2", salt: enc.encode("v15-9-salt"), iterations: 100000, hash: "SHA-256" },
+                bk, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]
+            );
         }
 
         async function encrypt(d) {
@@ -73,12 +72,15 @@
         }
 
         async function decrypt(iv, d) {
-            try { return await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(iv) }, cryptoKey, new Uint8Array(d)); } 
-            catch(e) { return null; }
+            try { 
+                return await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(iv) }, cryptoKey, new Uint8Array(d)); 
+            } catch(e) { 
+                console.error("Error descifrando: Clave incorrecta o datos corruptos");
+                return null; 
+            }
         }
 
         async function startApp() {
-            // Inicializar audio al hacer click
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             analyser = audioCtx.createAnalyser();
             analyser.fftSize = 64;
@@ -97,20 +99,29 @@
 
         socket.on('audio-stream', async d => {
             const dec = await decrypt(d.buffer.iv, d.buffer.ciphertext);
-            if(dec && dec.byteLength > 0) {
+            if(dec && dec.byteLength > 100) { // Ignorar paquetes demasiado pequeños
                 if(audioCtx.state === 'suspended') audioCtx.resume();
                 document.getElementById('voice-id').innerText = "RECIBIENDO: " + d.user;
                 
-                const blob = new Blob([dec], {type:'audio/webm'});
-                const audio = new Audio(URL.createObjectURL(blob));
-                
-                // Conexión forzada al destino
-                const src = audioCtx.createMediaElementSource(audio);
-                src.connect(analyser);
-                analyser.connect(audioCtx.destination);
-                
-                audio.play().catch(e => console.log("Error play:", e));
-                audio.onended = () => document.getElementById('voice-id').innerText = "STATUS: READY";
+                try {
+                    const blob = new Blob([dec], { type: 'audio/webm; codecs=opus' });
+                    const url = URL.createObjectURL(blob);
+                    const audio = new Audio();
+                    audio.src = url;
+                    
+                    const src = audioCtx.createMediaElementSource(audio);
+                    src.connect(analyser);
+                    analyser.connect(audioCtx.destination);
+                    
+                    audio.play().catch(e => {
+                        // Aquí capturamos el NotSupportedError y evitamos que rompa la app
+                    });
+                    
+                    audio.onended = () => {
+                        document.getElementById('voice-id').innerText = "STATUS: READY";
+                        URL.revokeObjectURL(url);
+                    };
+                } catch(e) {}
             }
         });
 
@@ -127,17 +138,25 @@
 
             socket.on('mic-granted', () => {
                 btn.classList.add('recording');
-                rec = new MediaRecorder(stream);
+                // IMPORTANTE: MIME Type explícito
+                rec = new MediaRecorder(stream, { mimeType: 'audio/webm; codecs=opus' });
                 rec.ondataavailable = async ev => {
-                    // ELIMINAMOS EL NOISE GATE PARA PROBAR AUDIO PURO
-                    const enc = await encrypt(await ev.data.arrayBuffer());
-                    socket.emit('audio-chunk', enc);
+                    if (ev.data.size > 0) {
+                        const buffer = await ev.data.arrayBuffer();
+                        const enc = await encrypt(buffer);
+                        socket.emit('audio-chunk', enc);
+                    }
                 };
-                rec.start(400);
+                // Enviar cada 500ms para asegurar que el chunk tenga datos suficientes
+                rec.start(500); 
             });
 
             btn.onmouseup = btn.ontouchend = btn.onmouseleave = () => {
-                if(rec && rec.state !== 'inactive') { rec.stop(); socket.emit('release-mic'); btn.classList.remove('recording'); }
+                if(rec && rec.state !== 'inactive') { 
+                    rec.stop(); 
+                    socket.emit('release-mic'); 
+                    btn.classList.remove('recording'); 
+                }
             };
         });
 
