@@ -3,194 +3,149 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PHANTOM V17.5</title>
+    <title>SECURE COMMS V14.5</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        :root { --neon: #00ff41; --sos: #ff3131; --bg: #0a0a0f; }
-        body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
-        #auth-overlay { position: fixed; inset: 0; background: #000; z-index: 100; display: flex; justify-content: center; align-items: center; }
-        .card { background: #111; padding: 25px; border-radius: 20px; border: 1px solid var(--neon); width: 280px; text-align: center; }
-        input { background: #000; border: 1px solid #333; color: white; padding: 12px; margin-bottom: 10px; width: 90%; border-radius: 10px; outline: none; }
-        .main-ui { flex: 1; display: flex; flex-direction: column; padding: 15px; }
-        #chat { flex: 1; overflow-y: auto; background: rgba(255,255,255,0.02); border-radius: 10px; padding: 10px; font-size: 13px; margin-bottom: 10px; border: 1px solid #222; }
-        .viz-box { height: 60px; background: #000; border: 1px solid #333; border-radius: 10px; margin-bottom: 10px; }
-        #talk-btn { width: 100%; padding: 25px; border-radius: 20px; border: none; background: #ff8c00; font-size: 20px; font-weight: bold; touch-action: none; cursor: pointer; }
-        #talk-btn.active { background: var(--sos); color: white; }
-        #debug-log { height: 80px; background: #000; font-family: monospace; font-size: 10px; color: #888; overflow-y: auto; padding: 5px; border: 1px solid #444; }
+        :root { --neon: #00ff41; --glass: rgba(255, 255, 255, 0.08); --sos: #ff3131; }
+        body { margin: 0; background: #07070c; color: white; font-family: sans-serif; display: flex; justify-content: center; height: 100vh; overflow: hidden; transition: 0.2s; }
+        .glass-container { width: 95%; max-width: 450px; height: 95vh; background: var(--glass); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); border-radius: 35px; border: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; padding: 20px; box-sizing: border-box; margin-top: 10px; }
+        header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid #333; }
+        .sos-btn-top { background: #400; color: var(--sos); border: 1px solid var(--sos); padding: 8px 15px; border-radius: 12px; font-weight: 900; cursor: pointer; font-size: 14px; }
+        #user-list-box { position: absolute; top: 70px; left: 20px; right: 20px; background: rgba(10,10,20,0.95); border: 1px solid #333; border-radius: 15px; padding: 15px; z-index: 50; display: none; }
+        #chat { flex: 1; overflow-y: auto; margin: 10px 0; font-size: 13px; display: flex; flex-direction: column; gap: 5px; }
+        .msg { background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 12px; border-left: 3px solid var(--neon); }
+        .viz-box { height: 60px; background: rgba(0,0,0,0.5); border-radius: 18px; position: relative; overflow: hidden; }
+        #voice-id { position: absolute; top: 5px; left: 10px; font-size: 9px; color: #555; }
+        .input-bar { display: flex; gap: 8px; margin: 10px 0; }
+        input { background: #111; border: 1px solid #333; color: white; padding: 14px; border-radius: 15px; outline: none; }
+        .ptt-container { padding-bottom: 30px; } 
+        #talk-btn { width: 100%; padding: 25px; border-radius: 25px; border: none; background: linear-gradient(135deg, #e74c3c, var(--sos)); color: white; font-weight: 900; font-size: 18px; letter-spacing: 2px; cursor: pointer; touch-action: none; user-select: none; box-shadow: 0 8px 25px rgba(255, 49, 49, 0.4); }
+        #talk-btn.recording { filter: brightness(1.3); animation: pulse 0.8s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(0.98); } }
+        .sos-active-screen { animation: screen-red 0.3s infinite; }
+        @keyframes screen-red { 0% { background: #07070c; } 50% { background: #600; } }
+        #auth-overlay { position: fixed; inset: 0; background: #000; display: flex; justify-content: center; align-items: center; z-index: 1000; }
+        .card { background: #0a0a15; padding: 30px; border-radius: 25px; border: 1px solid var(--neon); text-align: center; width: 280px; }
+        .saver canvas { display: none; }
     </style>
 </head>
-<body>
-
-<div id="auth-overlay">
-    <form class="card" onsubmit="event.preventDefault(); startApp();">
-        <h2 style="color: var(--neon); margin-top:0;">PHANTOM V17.5</h2>
-        <input type="text" id="nick-in" placeholder="ID OPERADOR" required autocomplete="username">
-        <input type="text" id="room-in" placeholder="CANAL" required>
-        <input type="password" id="pass-in" placeholder="CLAVE" required autocomplete="current-password">
-        <button type="submit" style="width:100%; padding:15px; background:var(--neon); border:none; border-radius:10px; font-weight:bold; cursor:pointer;">CONECTAR</button>
-    </form>
-</div>
-
-<div class="main-ui">
-    <header style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:10px;">
-        <span id="room-stat">---</span>
-        <span id="user-count">USUARIOS: 0</span>
-    </header>
-
-    <div id="chat"></div>
-    <div class="viz-box"><canvas id="visualizer"></canvas></div>
-
-    <div style="display:flex; gap:10px; margin-bottom:15px;">
-        <input type="text" id="msg-in" placeholder="Escribir mensaje..." style="margin-bottom:0; flex:1;">
-        <button onclick="sendMsg()" style="background:var(--neon); border:none; padding:0 20px; border-radius:10px; font-weight:bold;">></button>
+<body id="b-main">
+    <div id="auth-overlay">
+        <div class="card">
+            <h2 style="color: var(--neon); letter-spacing: 2px;">V14.5 SECURE</h2>
+            <input type="text" id="nick-in" placeholder="ID OPERADOR">
+            <input type="text" id="room-in" placeholder="CANAL">
+            <input type="password" id="pass-in" placeholder="CLAVE E2EE">
+            <button onclick="startApp()" style="width:100%; padding:15px; background:var(--neon); border:none; border-radius:12px; margin-top:15px; font-weight:bold; cursor:pointer;">CONECTAR</button>
+            <p style="font-size: 8px; color: #444; margin-top: 15px;">POC Educativo. Al conectar acepta el riesgo legal.</p>
+        </div>
     </div>
+    <div class="glass-container">
+        <header>
+            <button onclick="toggleUsers()" style="background:none; border:none; color:var(--neon); font-size:10px; cursor:pointer;">[ OPERADORES ]</button>
+            <span id="room-disp" style="font-weight:bold; font-size:12px;">CANAL: ---</span>
+            <button id="sos-trigger" class="sos-btn-top">⚠️ SOS</button>
+        </header>
+        <div id="user-list-box"><div id="user-names"></div></div>
+        <div id="chat"></div>
+        <div class="viz-box"><div id="voice-id">RECEPTOR: IDLE</div><canvas id="visualizer"></canvas></div>
+        <div class="input-bar">
+            <input type="text" id="msg-in" style="flex:1;" placeholder="Comms..." onkeydown="if(event.key==='Enter') send()">
+            <button onclick="send()" style="background:var(--neon); border:none; border-radius:15px; width:50px; font-weight:bold; cursor:pointer;">></button>
+        </div>
+        <div class="ptt-container"><button id="talk-btn">HABLAR</button></div>
+    </div>
+    <script>
+        // --- SUSTITUYE CON TU URL DE TÚNEL ---
+        const SERVER = "https://russell-hearts-vertical-digital.trycloudflare.com"; 
+        const socket = io(SERVER, { transports: ['polling'] });
+        let audioCtx, analyser, dataArray, cryptoKey, sosTimer;
+        window.isQuiet = true;
 
-    <button id="talk-btn">PULSAR PARA HABLAR</button>
-    <div id="debug-log">Iniciando logs de sistema...</div>
-</div>
-
-<script>
-    // ⚠️ CAMBIA ESTO POR TU URL DE CLOUDFLARE ACTUAL
-    const SERVER = "https://quotes-tract-chem-sol.trycloudflare.com/"; 
-    const socket = io(SERVER);
-
-    let audioCtx, analyser, dataArray, cryptoKey, micStream, mediaRecorder, mainGain;
-    let chunks = [];
-    let isReceiving = false;
-
-    function log(msg, color = "#888") {
-        const d = document.getElementById('debug-log');
-        d.innerHTML += `<div style="color:${color}">> ${msg}</div>`;
-        d.scrollTop = d.scrollHeight;
-    }
-
-    async function startApp() {
-        try {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            mainGain = audioCtx.createGain(); mainGain.connect(audioCtx.destination);
-            analyser = audioCtx.createAnalyser(); analyser.fftSize = 256;
-            dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-            const pass = document.getElementById('pass-in').value;
+        async function deriveKey(p) {
             const enc = new TextEncoder();
-            const bk = await crypto.subtle.importKey("raw", enc.encode(pass), "PBKDF2", false, ["deriveKey"]);
-            cryptoKey = await crypto.subtle.deriveKey({ name: "PBKDF2", salt: enc.encode("v17.5"), iterations: 100000, hash: "SHA-256" }, bk, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
-
-            socket.emit('join-room', { 
-                nickname: document.getElementById('nick-in').value, 
-                roomName: document.getElementById('room-in').value 
-            });
-            log("Intentando conectar...", "orange");
-        } catch(e) { log("Error: " + e.message, "red"); }
-    }
-
-    socket.on('joined-success', () => {
-        document.getElementById('auth-overlay').style.display = 'none';
-        document.getElementById('room-stat').innerText = "CANAL ACTIVO";
-        log("Conexión Exitosa", "var(--neon)");
-        initMic();
-        draw();
-    });
-
-    socket.on('connect_error', (e) => log("Error de red: Revisa la URL", "red"));
-
-    function initMic() {
-        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-            micStream = stream;
-            const btn = document.getElementById('talk-btn');
-
-            const startTX = (e) => {
-                if(e.cancelable) e.preventDefault();
-                if(audioCtx.state === 'suspended') audioCtx.resume();
-                mainGain.gain.value = 0; // Anti-feedback
-                btn.classList.add('active');
-                chunks = [];
-                mediaRecorder = new MediaRecorder(stream);
-                mediaRecorder.ondataavailable = (ev) => chunks.push(ev.data);
-                mediaRecorder.onstop = async () => {
-                    const blob = new Blob(chunks, { type: 'audio/webm' });
-                    const buffer = await blob.arrayBuffer();
-                    const iv = crypto.getRandomValues(new Uint8Array(12));
-                    const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, cryptoKey, buffer);
-                    socket.emit('audio-chunk', { iv: Array.from(iv), ciphertext: Array.from(new Uint8Array(ct)) });
-                    log("Audio transmitido: " + blob.size + "b");
-                };
-                mediaRecorder.start();
-                socket.emit('request-mic');
-            };
-
-            const stopTX = () => {
-                if(mediaRecorder && mediaRecorder.state !== 'inactive') {
-                    mediaRecorder.stop();
-                    btn.classList.remove('active');
-                    mainGain.gain.value = 1;
-                    socket.emit('release-mic');
-                }
-            };
-
-            btn.addEventListener('touchstart', startTX, {passive:false});
-            btn.addEventListener('touchend', stopTX);
-            btn.addEventListener('mousedown', startTX);
-            btn.addEventListener('mouseup', stopTX);
-        }).catch(e => log("Error Mic: Conecta por HTTPS", "red"));
-    }
-
-    socket.on('audio-stream', async d => {
-        try {
-            log("Recibiendo audio...");
-            const dec = await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(d.iv) }, cryptoKey, new Uint8Array(d.ciphertext));
-            audioCtx.decodeAudioData(dec, (buffer) => {
-                const source = audioCtx.createBufferSource();
-                source.buffer = buffer;
-                source.connect(analyser); analyser.connect(mainGain);
-                source.start(0);
-            });
-        } catch(e) { log("Error de descifrado", "red"); }
-    });
-
-    socket.on('user-list', list => { document.getElementById('user-count').innerText = "USUARIOS: " + list.length; });
-    
-    socket.on('channel-busy', u => { 
-        if(u !== document.getElementById('nick-in').value) isReceiving = true; 
-        log("Ocupado por: " + u, "orange");
-    });
-    
-    socket.on('channel-free', () => { isReceiving = false; log("Libre", "var(--neon)"); });
-
-    function draw() {
-        requestAnimationFrame(draw);
-        const c = document.querySelector('canvas'); const ctx = c.getContext('2d');
-        ctx.clearRect(0,0,c.width,c.height);
-        if(isReceiving) {
-            analyser.getByteTimeDomainData(dataArray);
-            ctx.strokeStyle = 'red'; ctx.beginPath();
-            let x = 0; let sw = c.width/dataArray.length;
-            for(let i=0; i<dataArray.length; i++){
-                let y = (dataArray[i]/128)*c.height/2;
-                if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-                x+=sw;
-            }
-            ctx.stroke();
-        } else {
-            analyser.getByteFrequencyData(dataArray);
-            ctx.fillStyle = '#00ff41';
-            dataArray.forEach((v,i) => { ctx.fillRect(i*10, c.height-v/2, 8, v/2); });
+            const bk = await crypto.subtle.importKey("raw", enc.encode(p), "PBKDF2", false, ["deriveKey"]);
+            return crypto.subtle.deriveKey({ name: "PBKDF2", salt: enc.encode("v14-5-salt"), iterations: 100000, hash: "SHA-256" }, bk, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
         }
-    }
+        async function encrypt(d) {
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, cryptoKey, d);
+            return { iv: Array.from(iv), ciphertext: Array.from(new Uint8Array(ct)) };
+        }
+        async function decrypt(iv, d) {
+            try { return await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(iv) }, cryptoKey, new Uint8Array(d)); } catch(e) { return null; }
+        }
+        async function startApp() {
+            const p = document.getElementById('pass-in').value; const n = document.getElementById('nick-in').value; const r = document.getElementById('room-in').value;
+            if(!p || !n || !r) return;
+            cryptoKey = await deriveKey(p);
+            socket.emit('join-room', { nickname: n, roomName: r, password: p });
+        }
+        socket.on('joined-success', d => { document.getElementById('auth-overlay').style.display='none'; document.getElementById('room-disp').innerText = "CANAL: " + d.roomName.toUpperCase(); initAudio(); });
+        function toggleUsers() { const b = document.getElementById('user-list-box'); b.style.display = b.style.display === 'none' ? 'block' : 'none'; }
+        socket.on('user-list', list => { document.getElementById('user-names').innerHTML = list.map(u => `• ${u}`).join('<br>'); });
 
-    function sendMsg() { 
-        const i = document.getElementById('msg-in'); 
-        if(i.value) socket.emit('chat-message', i.value); 
-        i.value = ""; 
-    }
+        const sosBtn = document.getElementById('sos-trigger');
+        sosBtn.onmousedown = sosBtn.ontouchstart = (e) => { if(e.cancelable) e.preventDefault(); sosTimer = setTimeout(() => { socket.emit('sos-alert'); }, 2000); };
+        sosBtn.onmouseup = sosBtn.ontouchend = () => clearTimeout(sosTimer);
 
-    socket.on('chat-message', d => {
-        const m = document.createElement('div');
-        m.style.marginBottom = "5px";
-        m.innerHTML = `<b style="color:var(--neon)">${d.user}:</b> ${d.text}`;
-        document.getElementById('chat').appendChild(m);
-        document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
-    });
-</script>
+        socket.on('sos-activated', d => {
+            document.body.classList.add('sos-active-screen'); if(navigator.vibrate) navigator.vibrate([200, 100, 200]);
+            const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+            osc.type = 'sawtooth'; osc.frequency.value = 800; gain.gain.value = 0.3;
+            osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 1.5);
+            setTimeout(() => document.body.classList.remove('sos-active-screen'), 3000);
+        });
+
+        function initAudio() {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            analyser = audioCtx.createAnalyser(); analyser.fftSize = 64; dataArray = new Uint8Array(analyser.frequencyBinCount);
+            draw();
+        }
+        function draw() {
+            requestAnimationFrame(draw); if(!analyser) return; analyser.getByteFrequencyData(dataArray);
+            const canvas = document.getElementById('visualizer'); const ctx = canvas.getContext('2d');
+            ctx.clearRect(0,0,canvas.width, canvas.height);
+            dataArray.forEach((v, i) => { ctx.fillStyle = `rgba(0,255,65,${v/255})`; ctx.fillRect(i*12, canvas.height-(v/2), 10, v/2); });
+        }
+        socket.on('audio-stream', async d => {
+            const dec = await decrypt(d.buffer.iv, d.buffer.ciphertext); if(!dec) return;
+            document.getElementById('voice-id').innerText = "RECEPTOR: " + d.user;
+            const audio = new Audio(URL.createObjectURL(new Blob([dec], {type:'audio/webm'})));
+            const src = audioCtx.createMediaElementSource(audio); src.connect(analyser); analyser.connect(audioCtx.destination); audio.play();
+        });
+
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+            const btn = document.getElementById('talk-btn');
+            const source = audioCtx.createMediaStreamSource(stream);
+            const processor = audioCtx.createScriptProcessor(2048, 1, 1);
+            processor.onaudioprocess = (e) => {
+                const input = e.inputBuffer.getChannelData(0); let sum = 0;
+                for (let i = 0; i < input.length; i++) sum += input[i] * input[i];
+                window.isQuiet = Math.sqrt(sum / input.length) < 0.015;
+            };
+            source.connect(processor); processor.connect(audioCtx.destination);
+
+            let rec;
+            const start = async (e) => {
+                if(e.cancelable) e.preventDefault(); if(audioCtx.state === 'suspended') audioCtx.resume();
+                btn.classList.add('recording'); rec = new MediaRecorder(stream);
+                rec.ondataavailable = async ev => {
+                    if (window.isQuiet) return;
+                    const enc = await encrypt(await ev.data.arrayBuffer()); socket.emit('audio-chunk', enc);
+                };
+                rec.start(400);
+            };
+            const stop = () => { btn.classList.remove('recording'); if(rec) rec.stop(); };
+            btn.onmousedown = btn.ontouchstart = start; btn.onmouseup = btn.ontouchend = btn.onmouseleave = stop;
+        });
+
+        function send() { const i = document.getElementById('msg-in'); if(i.value.trim()) { socket.emit('chat-message', i.value); i.value = ""; } }
+        socket.on('chat-message', d => {
+            const c = document.getElementById('chat'); const div = document.createElement('div');
+            div.className = 'msg'; div.innerHTML = `<b style="color:var(--neon)">${d.user}:</b> ${d.text}`;
+            c.appendChild(div); c.scrollTop = c.scrollHeight;
+        });
+    </script>
 </body>
 </html>
