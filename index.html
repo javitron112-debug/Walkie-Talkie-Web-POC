@@ -3,178 +3,194 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PHANTOM V17.3 | Bloque de Audio</title>
+    <title>PHANTOM V17.5</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        :root { --neon: #00ff41; --sos: #ff3131; --bg: #07070c; }
-        body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; height: 100vh; display: flex; flex-direction: column; align-items: center; overflow: hidden; }
-        .glass-container { width: 95%; max-width: 450px; height: 95vh; background: rgba(255,255,255,0.05); border-radius: 20px; display: flex; flex-direction: column; padding: 15px; border: 1px solid #333; margin-top: 10px; }
-        #debug-console { height: 80px; background: #000; color: #00ff41; font-family: monospace; font-size: 9px; overflow-y: auto; padding: 5px; border: 1px solid #444; margin-bottom: 10px; border-radius: 5px; }
-        #chat { flex: 1; overflow-y: auto; font-size: 11px; margin-bottom: 5px; }
-        .viz-box { height: 50px; background: #000; border: 1px solid #444; margin-bottom: 10px; }
-        #talk-btn { width: 100%; padding: 25px; border-radius: 15px; border: none; background: #ff8c00; font-weight: bold; font-size: 20px; touch-action: none; cursor: pointer; color: black; }
+        :root { --neon: #00ff41; --sos: #ff3131; --bg: #0a0a0f; }
+        body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+        #auth-overlay { position: fixed; inset: 0; background: #000; z-index: 100; display: flex; justify-content: center; align-items: center; }
+        .card { background: #111; padding: 25px; border-radius: 20px; border: 1px solid var(--neon); width: 280px; text-align: center; }
+        input { background: #000; border: 1px solid #333; color: white; padding: 12px; margin-bottom: 10px; width: 90%; border-radius: 10px; outline: none; }
+        .main-ui { flex: 1; display: flex; flex-direction: column; padding: 15px; }
+        #chat { flex: 1; overflow-y: auto; background: rgba(255,255,255,0.02); border-radius: 10px; padding: 10px; font-size: 13px; margin-bottom: 10px; border: 1px solid #222; }
+        .viz-box { height: 60px; background: #000; border: 1px solid #333; border-radius: 10px; margin-bottom: 10px; }
+        #talk-btn { width: 100%; padding: 25px; border-radius: 20px; border: none; background: #ff8c00; font-size: 20px; font-weight: bold; touch-action: none; cursor: pointer; }
         #talk-btn.active { background: var(--sos); color: white; }
-        #auth-overlay { position: fixed; inset: 0; background: #000; display: flex; justify-content: center; align-items: center; z-index: 1000; }
-        input { background: #111; border: 1px solid #333; color: white; padding: 12px; margin-bottom: 10px; width: 85%; border-radius: 10px; }
+        #debug-log { height: 80px; background: #000; font-family: monospace; font-size: 10px; color: #888; overflow-y: auto; padding: 5px; border: 1px solid #444; }
     </style>
 </head>
 <body>
 
-    <div id="auth-overlay">
-        <form class="card" onsubmit="event.preventDefault(); startApp();" style="text-align: center;">
-            <h2 style="color: var(--neon);">PHANTOM V17.3</h2>
-            <input type="text" id="nick-in" placeholder="TU ID" required autocomplete="username">
-            <input type="text" id="room-in" placeholder="CANAL" required>
-            <input type="password" id="pass-in" placeholder="CLAVE E2EE" required autocomplete="current-password">
-            <button type="submit" style="width:100%; padding:15px; background:var(--neon); border:none; border-radius:10px; font-weight:bold; cursor:pointer; color:black;">CONECTAR</button>
-        </form>
+<div id="auth-overlay">
+    <form class="card" onsubmit="event.preventDefault(); startApp();">
+        <h2 style="color: var(--neon); margin-top:0;">PHANTOM V17.5</h2>
+        <input type="text" id="nick-in" placeholder="ID OPERADOR" required autocomplete="username">
+        <input type="text" id="room-in" placeholder="CANAL" required>
+        <input type="password" id="pass-in" placeholder="CLAVE" required autocomplete="current-password">
+        <button type="submit" style="width:100%; padding:15px; background:var(--neon); border:none; border-radius:10px; font-weight:bold; cursor:pointer;">CONECTAR</button>
+    </form>
+</div>
+
+<div class="main-ui">
+    <header style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:10px;">
+        <span id="room-stat">---</span>
+        <span id="user-count">USUARIOS: 0</span>
+    </header>
+
+    <div id="chat"></div>
+    <div class="viz-box"><canvas id="visualizer"></canvas></div>
+
+    <div style="display:flex; gap:10px; margin-bottom:15px;">
+        <input type="text" id="msg-in" placeholder="Escribir mensaje..." style="margin-bottom:0; flex:1;">
+        <button onclick="sendMsg()" style="background:var(--neon); border:none; padding:0 20px; border-radius:10px; font-weight:bold;">></button>
     </div>
 
-    <div class="glass-container">
-        <div id="debug-console">READY. Esperando login...<br></div>
-        <div id="chat"></div>
-        <div class="viz-box"><canvas id="visualizer"></canvas></div>
-        
-        <div style="display:flex; gap:5px; margin-bottom:10px;">
-            <input type="text" id="msg-in" placeholder="Escribir..." style="flex:1; margin-bottom:0; background:#000; border:1px solid #333; color:white; padding:10px; border-radius:5px;">
-            <button onclick="sendMsg()" style="background:var(--neon); border:none; border-radius:5px; padding:0 15px; cursor:pointer;">></button>
-        </div>
+    <button id="talk-btn">PULSAR PARA HABLAR</button>
+    <div id="debug-log">Iniciando logs de sistema...</div>
+</div>
 
-        <button id="talk-btn">MANTENER PARA HABLAR</button>
-    </div>
+<script>
+    // ⚠️ CAMBIA ESTO POR TU URL DE CLOUDFLARE ACTUAL
+    const SERVER = "https://page-preference-scholarship-road.trycloudflare.com"; 
+    const socket = io(SERVER);
 
-    <script>
-        const SERVER = "https://quotes-tract-chem-sol.trycloudflare.com/"; 
-        const socket = io(SERVER, { transports: ['websocket'] });
+    let audioCtx, analyser, dataArray, cryptoKey, micStream, mediaRecorder, mainGain;
+    let chunks = [];
+    let isReceiving = false;
 
-        let audioCtx, analyser, dataArray, cryptoKey, micSource, mainGain, mediaRecorder;
-        let audioChunks = []; // Almacén temporal para el audio
-        let myNick = "", isReceiving = false;
+    function log(msg, color = "#888") {
+        const d = document.getElementById('debug-log');
+        d.innerHTML += `<div style="color:${color}">> ${msg}</div>`;
+        d.scrollTop = d.scrollHeight;
+    }
 
-        function log(msg, err = false) {
-            const c = document.getElementById('debug-console');
-            c.innerHTML += `<span style="color:${err?'red':'#00ff41'}">> ${msg}</span><br>`;
-            c.scrollTop = c.scrollHeight;
-        }
-
-        async function startApp() {
+    async function startApp() {
+        try {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             mainGain = audioCtx.createGain(); mainGain.connect(audioCtx.destination);
-            analyser = audioCtx.createAnalyser(); analyser.fftSize = 128;
+            analyser = audioCtx.createAnalyser(); analyser.fftSize = 256;
             dataArray = new Uint8Array(analyser.frequencyBinCount);
-            
+
             const pass = document.getElementById('pass-in').value;
             const enc = new TextEncoder();
             const bk = await crypto.subtle.importKey("raw", enc.encode(pass), "PBKDF2", false, ["deriveKey"]);
-            cryptoKey = await crypto.subtle.deriveKey({ name: "PBKDF2", salt: enc.encode("v17"), iterations: 100000, hash: "SHA-256" }, bk, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
-            
-            myNick = document.getElementById('nick-in').value;
-            socket.emit('join-room', { nickname: myNick, roomName: document.getElementById('room-in').value });
-            document.getElementById('auth-overlay').style.display = 'none';
-            log("Conectado como " + myNick);
-            initMic(); draw();
-        }
+            cryptoKey = await crypto.subtle.deriveKey({ name: "PBKDF2", salt: enc.encode("v17.5"), iterations: 100000, hash: "SHA-256" }, bk, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
 
-        function initMic() {
-            navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-                log("Micrófono OK");
-                micSource = audioCtx.createMediaStreamSource(stream);
-                const btn = document.getElementById('talk-btn');
+            socket.emit('join-room', { 
+                nickname: document.getElementById('nick-in').value, 
+                roomName: document.getElementById('room-in').value 
+            });
+            log("Intentando conectar...", "orange");
+        } catch(e) { log("Error: " + e.message, "red"); }
+    }
 
-                btn.onmousedown = btn.ontouchstart = (e) => {
-                    if(e.cancelable) e.preventDefault();
-                    if(audioCtx.state === 'suspended') audioCtx.resume();
-                    
-                    audioChunks = []; // Limpiamos el buffer
-                    mainGain.gain.value = 0;
-                    micSource.connect(analyser);
-                    btn.classList.add('active');
-                    socket.emit('request-mic');
+    socket.on('joined-success', () => {
+        document.getElementById('auth-overlay').style.display = 'none';
+        document.getElementById('room-stat').innerText = "CANAL ACTIVO";
+        log("Conexión Exitosa", "var(--neon)");
+        initMic();
+        draw();
+    });
 
-                    mediaRecorder = new MediaRecorder(stream);
-                    mediaRecorder.ondataavailable = (ev) => audioChunks.push(ev.data);
-                    
-                    // IMPORTANTE: Al parar, procesamos todo el bloque
-                    mediaRecorder.onstop = async () => {
-                        const blob = new Blob(audioChunks, { type: 'audio/webm' });
-                        if(blob.size > 2000) { // Solo enviamos si hay suficiente audio (>2KB)
-                            const buffer = await blob.arrayBuffer();
-                            const iv = crypto.getRandomValues(new Uint8Array(12));
-                            const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, cryptoKey, buffer);
-                            socket.emit('audio-chunk', { iv: Array.from(iv), ciphertext: Array.from(new Uint8Array(ct)) });
-                            log("Audio enviado: " + Math.round(blob.size/1024) + " KB");
-                        } else {
-                            log("Audio demasiado corto ignorado");
-                        }
-                    };
-                    mediaRecorder.start();
+    socket.on('connect_error', (e) => log("Error de red: Revisa la URL", "red"));
+
+    function initMic() {
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+            micStream = stream;
+            const btn = document.getElementById('talk-btn');
+
+            const startTX = (e) => {
+                if(e.cancelable) e.preventDefault();
+                if(audioCtx.state === 'suspended') audioCtx.resume();
+                mainGain.gain.value = 0; // Anti-feedback
+                btn.classList.add('active');
+                chunks = [];
+                mediaRecorder = new MediaRecorder(stream);
+                mediaRecorder.ondataavailable = (ev) => chunks.push(ev.data);
+                mediaRecorder.onstop = async () => {
+                    const blob = new Blob(chunks, { type: 'audio/webm' });
+                    const buffer = await blob.arrayBuffer();
+                    const iv = crypto.getRandomValues(new Uint8Array(12));
+                    const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, cryptoKey, buffer);
+                    socket.emit('audio-chunk', { iv: Array.from(iv), ciphertext: Array.from(new Uint8Array(ct)) });
+                    log("Audio transmitido: " + blob.size + "b");
                 };
+                mediaRecorder.start();
+                socket.emit('request-mic');
+            };
 
-                btn.onmouseup = btn.ontouchend = () => {
-                    if(mediaRecorder && mediaRecorder.state !== 'inactive') {
-                        mediaRecorder.stop();
-                        btn.classList.remove('active');
-                        micSource.disconnect(analyser);
-                        mainGain.gain.value = 1;
-                        socket.emit('release-mic');
-                    }
-                };
-            }).catch(e => log("Error micro: " + e.message, true));
-        }
-
-        socket.on('audio-stream', async d => {
-            log("Recibiendo audio...");
-            try {
-                if (audioCtx.state === 'suspended') await audioCtx.resume();
-                const dec = await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(d.iv) }, cryptoKey, new Uint8Array(d.ciphertext));
-                
-                // Intentamos decodificar el bloque completo
-                audioCtx.decodeAudioData(dec, (buffer) => {
-                    log("Reproduciendo voz...", false);
-                    const source = audioCtx.createBufferSource();
-                    source.buffer = buffer;
-                    source.connect(analyser);
-                    analyser.connect(mainGain);
-                    source.start(0);
-                }, (err) => log("Error de decodificación", true));
-            } catch(e) { log("Error de descifrado (Clave incorrecta)", true); }
-        });
-
-        socket.on('channel-busy', u => { 
-            if(u !== myNick) isReceiving = true; 
-            log("Canal ocupado por " + u);
-        });
-        socket.on('channel-free', () => { 
-            isReceiving = false; 
-            log("Canal libre");
-        });
-
-        function draw() {
-            requestAnimationFrame(draw);
-            const c = document.querySelector('canvas'); const ctx = c.getContext('2d');
-            ctx.clearRect(0,0,c.width,c.height);
-            if(isReceiving) {
-                analyser.getByteTimeDomainData(dataArray);
-                ctx.strokeStyle = 'red'; ctx.beginPath();
-                let x = 0; let sw = c.width/dataArray.length;
-                for(let i=0; i<dataArray.length; i++) {
-                    let y = (dataArray[i]/128)*c.height/2;
-                    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-                    x+=sw;
+            const stopTX = () => {
+                if(mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                    btn.classList.remove('active');
+                    mainGain.gain.value = 1;
+                    socket.emit('release-mic');
                 }
-                ctx.stroke();
-            } else {
-                analyser.getByteFrequencyData(dataArray);
-                ctx.fillStyle = '#00ff41';
-                dataArray.forEach((v,i) => { ctx.fillRect(i*10, c.height-v/2, 8, v/2); });
+            };
+
+            btn.addEventListener('touchstart', startTX, {passive:false});
+            btn.addEventListener('touchend', stopTX);
+            btn.addEventListener('mousedown', startTX);
+            btn.addEventListener('mouseup', stopTX);
+        }).catch(e => log("Error Mic: Conecta por HTTPS", "red"));
+    }
+
+    socket.on('audio-stream', async d => {
+        try {
+            log("Recibiendo audio...");
+            const dec = await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(d.iv) }, cryptoKey, new Uint8Array(d.ciphertext));
+            audioCtx.decodeAudioData(dec, (buffer) => {
+                const source = audioCtx.createBufferSource();
+                source.buffer = buffer;
+                source.connect(analyser); analyser.connect(mainGain);
+                source.start(0);
+            });
+        } catch(e) { log("Error de descifrado", "red"); }
+    });
+
+    socket.on('user-list', list => { document.getElementById('user-count').innerText = "USUARIOS: " + list.length; });
+    
+    socket.on('channel-busy', u => { 
+        if(u !== document.getElementById('nick-in').value) isReceiving = true; 
+        log("Ocupado por: " + u, "orange");
+    });
+    
+    socket.on('channel-free', () => { isReceiving = false; log("Libre", "var(--neon)"); });
+
+    function draw() {
+        requestAnimationFrame(draw);
+        const c = document.querySelector('canvas'); const ctx = c.getContext('2d');
+        ctx.clearRect(0,0,c.width,c.height);
+        if(isReceiving) {
+            analyser.getByteTimeDomainData(dataArray);
+            ctx.strokeStyle = 'red'; ctx.beginPath();
+            let x = 0; let sw = c.width/dataArray.length;
+            for(let i=0; i<dataArray.length; i++){
+                let y = (dataArray[i]/128)*c.height/2;
+                if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+                x+=sw;
             }
+            ctx.stroke();
+        } else {
+            analyser.getByteFrequencyData(dataArray);
+            ctx.fillStyle = '#00ff41';
+            dataArray.forEach((v,i) => { ctx.fillRect(i*10, c.height-v/2, 8, v/2); });
         }
-        function sendMsg() { const i = document.getElementById('msg-in'); if(i.value) socket.emit('chat-message', i.value); i.value=""; }
-        socket.on('chat-message', d => {
-            const m = document.createElement('div'); m.className = 'msg';
-            m.innerHTML = `<b>${d.user}:</b> ${d.text}`;
-            document.getElementById('chat').appendChild(m);
-        });
-    </script>
+    }
+
+    function sendMsg() { 
+        const i = document.getElementById('msg-in'); 
+        if(i.value) socket.emit('chat-message', i.value); 
+        i.value = ""; 
+    }
+
+    socket.on('chat-message', d => {
+        const m = document.createElement('div');
+        m.style.marginBottom = "5px";
+        m.innerHTML = `<b style="color:var(--neon)">${d.user}:</b> ${d.text}`;
+        document.getElementById('chat').appendChild(m);
+        document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
+    });
+</script>
 </body>
 </html>
