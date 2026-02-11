@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <link rel="icon" href="data:;base64,iVBORw0KGgo=">
-    <title>PHANTOM V16.9.6 | MASTER</title>
+    <title>PHANTOM V17.0 | WebSocket</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         :root { --neon: #00ff41; --sos: #ff3131; --ptt-orange: #ff8c00; --bg: #07070c; }
@@ -29,7 +28,7 @@
 
     <div id="auth-overlay">
         <form class="card" onsubmit="event.preventDefault(); startApp();">
-            <h2 style="color: var(--neon);">PHANTOM V16.9.6</h2>
+            <h2 style="color: var(--neon);">PHANTOM V17.0</h2>
             <input type="text" id="nick-in" placeholder="ID OPERADOR" required>
             <input type="text" id="room-in" placeholder="CANAL" required>
             <input type="password" id="pass-in" placeholder="CLAVE E2EE" required>
@@ -39,11 +38,13 @@
 
     <div class="glass-container">
         <header>
-            <div class="led-box">
-                <div id="status-led"></div>
-                <button id="user-toggle" onclick="toggleUsers()" style="background:none;border:none;color:#888;font-size:10px;text-decoration:underline;cursor:pointer;">OPERADORES: 0</button>
+            <div class="info-box">
+                <div class="led-box">
+                    <div id="status-led"></div>
+                    <button onclick="toggleUsers()" id="user-toggle" style="background:none;border:none;color:#888;font-size:10px;text-decoration:underline;">OPERADORES: 0</button>
+                </div>
+                <div id="latency-tag" style="font-size: 9px; color: var(--neon);">LAT: -- ms</div>
             </div>
-            <div id="latency-tag" style="font-size: 9px; color: var(--neon);">LAT: -- ms</div>
             <button onclick="sendSOS()" style="background:#400;color:var(--sos);border:1px solid var(--sos);padding:8px 15px;border-radius:10px;font-weight:bold;cursor:pointer;font-size:12px;">⚠️ SOS</button>
         </header>
         <div id="user-list-box" style="position: absolute; top: 75px; left: 20px; right: 20px; background: rgba(10,10,20,0.95); border: 1px solid var(--neon); border-radius: 15px; padding: 15px; z-index: 100; display: none;"><div id="user-names" style="color:var(--neon); font-size:12px;"></div></div>
@@ -54,8 +55,11 @@
     </div>
 
     <script>
-        const SERVER = "https://page-preference-scholarship-road.trycloudflare.com"; 
-        const socket = io(SERVER, { transports: ['polling'] });
+        // CAMBIA ESTA URL POR LA TUYA DE CLOUDFLARE
+        const SERVER = "https://education-joel-desert-bars.trycloudflare.com/"; 
+        
+        // CONEXIÓN FORZADA A WEBSOCKET
+        const socket = io(SERVER, { transports: ['websocket'], upgrade: false });
 
         let audioCtx, analyser, dataArray, cryptoKey, mediaRecorder, micSource, mainGain;
         let myNick = "", isMicLocked = false, isReceiving = false;
@@ -71,15 +75,6 @@
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 mainGain = audioCtx.createGain(); 
                 mainGain.connect(audioCtx.destination);
-                
-                // MANTENER AUDIO VIVO: Silencio inaudible pero constante
-                const silence = audioCtx.createOscillator();
-                const silenceGain = audioCtx.createGain();
-                silenceGain.gain.value = 0.0001; // Casi cero pero existente
-                silence.connect(silenceGain);
-                silenceGain.connect(audioCtx.destination);
-                silence.start();
-
                 analyser = audioCtx.createAnalyser(); 
                 analyser.fftSize = 256;
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
@@ -87,7 +82,7 @@
             if (audioCtx.state === 'suspended') await audioCtx.resume();
             myNick = document.getElementById('nick-in').value;
             cryptoKey = await deriveKey(document.getElementById('pass-in').value);
-            socket.emit('join-room', { nickname: myNick, roomName: document.getElementById('room-in').value, password: document.getElementById('pass-in').value });
+            socket.emit('join-room', { nickname: myNick, roomName: document.getElementById('room-in').value });
             startLatencyMonitor();
         }
 
@@ -95,24 +90,15 @@
             setInterval(() => {
                 const start = Date.now();
                 socket.emit("ping_check", () => {
-                    const tag = document.getElementById("latency-tag");
-                    if(tag) tag.innerText = `LAT: ${Date.now() - start} ms`;
+                    document.getElementById("latency-tag").innerText = `LAT: ${Date.now() - start} ms`;
                 });
             }, 3000);
         }
 
-        socket.on('joined-success', () => { 
-            document.getElementById('auth-overlay').style.display = 'none'; 
-            initMic(); draw(); 
-        });
+        socket.on('joined-success', () => { document.getElementById('auth-overlay').style.display = 'none'; initMic(); draw(); });
 
         function initMic() {
-            // Configuración extrema de micro
-            navigator.mediaDevices.getUserMedia({ audio: { 
-                echoCancellation: true, 
-                noiseSuppression: false,
-                autoGainControl: false 
-            } }).then(stream => {
+            navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }).then(stream => {
                 micSource = audioCtx.createMediaStreamSource(stream);
                 const btn = document.getElementById('talk-btn');
 
@@ -120,14 +106,11 @@
                     if(e.cancelable) e.preventDefault();
                     if(isMicLocked) return;
                     if(audioCtx.state === 'suspended') await audioCtx.resume();
-                    
                     mainGain.gain.setValueAtTime(0, audioCtx.currentTime); 
                     micSource.connect(analyser); 
                     socket.emit('request-mic');
                     btn.classList.add('active');
-                    
-                    // MIME TYPE Universal para máxima compatibilidad
-                    mediaRecorder = new MediaRecorder(stream, { bitsPerSecond: 64000 });
+                    mediaRecorder = new MediaRecorder(stream);
                     mediaRecorder.ondataavailable = async ev => {
                         if (ev.data.size > 0) {
                             const buffer = await ev.data.arrayBuffer();
@@ -142,8 +125,7 @@
                 const stopPTT = () => {
                     if(mediaRecorder && mediaRecorder.state !== 'inactive') {
                         mediaRecorder.stop(); socket.emit('release-mic'); btn.classList.remove('active');
-                        micSource.disconnect(analyser); 
-                        setTimeout(() => mainGain.gain.setValueAtTime(1, audioCtx.currentTime), 100);
+                        micSource.disconnect(analyser); mainGain.gain.setValueAtTime(1, audioCtx.currentTime);
                     }
                 };
 
@@ -151,44 +133,29 @@
                 btn.addEventListener('touchstart', startPTT, { passive: false });
                 btn.addEventListener('mouseup', stopPTT);
                 btn.addEventListener('touchend', stopPTT);
-                btn.addEventListener('mouseleave', stopPTT);
             });
         }
 
         socket.on('audio-stream', async d => {
             try {
                 if (audioCtx.state === 'suspended') await audioCtx.resume();
-                
-                const dec = await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(d.buffer.iv) }, cryptoKey, new Uint8Array(d.buffer.ciphertext));
-                
-                // MÉTODO DE REPRODUCCIÓN HÍBRIDO (Blob + Audio Object)
-                const blob = new Blob([dec], { type: 'audio/webm; codecs=opus' });
-                const audio = new Audio(URL.createObjectURL(blob));
-                const source = audioCtx.createMediaElementSource(audio);
-                
-                source.connect(analyser);
-                analyser.connect(mainGain);
-                
-                audio.play().catch(err => {
-                    // Si falla, intentamos decodificación directa como backup
-                    audioCtx.decodeAudioData(dec, (b) => {
-                        const s = audioCtx.createBufferSource();
-                        s.buffer = b; s.connect(analyser); analyser.connect(mainGain); s.start(0);
-                    });
+                const dec = await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(d.iv) }, cryptoKey, new Uint8Array(d.ciphertext));
+                audioCtx.decodeAudioData(dec, (buffer) => {
+                    const source = audioCtx.createBufferSource();
+                    source.buffer = buffer;
+                    source.connect(analyser);
+                    analyser.connect(mainGain);
+                    source.start(0);
                 });
-
-            } catch(e) { console.error("Fallo descifrado/reproducción:", e); }
+            } catch(e) { console.error("Error RX:", e); }
         });
 
-        // --- RESTO DE LÓGICA (UI/VIZ) IGUAL ---
         socket.on('channel-busy', user => {
             isMicLocked = true;
             document.getElementById('status-led').classList.add('busy-led');
             const btn = document.getElementById('talk-btn');
-            if(user !== myNick) {
-                btn.disabled = true; btn.innerText = `OCUPADO: ${user}`;
-                isReceiving = true; document.getElementById('mode-id').innerText = "RX";
-            } else { btn.innerText = "TX ACTIVADA"; }
+            if(user !== myNick) { btn.disabled = true; btn.innerText = `OCUPADO: ${user}`; isReceiving = true; document.getElementById('mode-id').innerText = "RX"; }
+            else { btn.innerText = "TX"; }
         });
 
         socket.on('channel-free', () => {
@@ -215,7 +182,7 @@
                 ctx.lineTo(c.width, c.height / 2); ctx.stroke();
             } else {
                 analyser.getByteFrequencyData(dataArray);
-                let barWidth = (c.width / dataArray.length) * 2.5; let x = 0;
+                let x = 0; let barWidth = (c.width / dataArray.length) * 2.5;
                 dataArray.forEach(v => {
                     ctx.fillStyle = isMicLocked && !document.getElementById('talk-btn').classList.contains('active') ? '#222' : `rgb(0, ${v + 100}, 65)`;
                     ctx.fillRect(x, c.height - (v/2), barWidth - 1, v/2);
@@ -223,15 +190,16 @@
                 });
             }
         }
-        socket.on('user-list', list => {
-            const toggleBtn = document.getElementById('user-toggle');
-            if(toggleBtn) toggleBtn.innerText = `OPERADORES: ${list.length}`;
-            document.getElementById('user-names').innerHTML = list.map(u => `• ${u}`).join('<br>');
-        });
+        socket.on('user-list', list => { document.getElementById('user-toggle').innerText = `OPERADORES: ${list.length}`; document.getElementById('user-names').innerHTML = list.map(u => `• ${u}`).join('<br>'); });
         function toggleUsers() { const box = document.getElementById('user-list-box'); box.style.display = box.style.display === 'block' ? 'none' : 'block'; }
         function sendSOS() { if(!confirm("¿SOS?")) return; navigator.geolocation.getCurrentPosition(pos => { socket.emit('chat-message', `🚨 SOS: https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}`); }); }
         function sendMsg() { const i = document.getElementById('msg-in'); if(i.value.trim()){ socket.emit('chat-message', i.value); i.value = ""; } }
-        socket.on('chat-message', d => { const c = document.getElementById('chat'); const div = document.createElement('div'); div.className = d.text.includes('🚨') ? 'msg msg-sos' : 'msg'; div.innerHTML = `<b>${d.user}:</b> ${d.text.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="color:#00ff41">$1</a>')}`; c.appendChild(div); c.scrollTop = c.scrollHeight; });
+        socket.on('chat-message', d => { 
+            const c = document.getElementById('chat'); const div = document.createElement('div'); 
+            div.className = d.text.includes('🚨') ? 'msg msg-sos' : 'msg';
+            div.innerHTML = `<b>${d.user}:</b> ${d.text.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="color:#00ff41">$1</a>')}`;
+            c.appendChild(div); c.scrollTop = c.scrollHeight;
+        });
     </script>
 </body>
 </html>
