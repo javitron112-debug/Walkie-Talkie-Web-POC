@@ -1,70 +1,39 @@
 ================================================================
-          WALKIE-TALKIE PRO V13 - SISTEMA MULTICANAL
+          SECURE COMMS V14.5 - TACTICAL COMMANDER
 ================================================================
 
-DESCRIPCIÓN:
+DESCRIPCIÓN TÉCNICA:
+--------------------
+Sistema de radiocomunicación digital táctico con cifrado de 
+extremo a extremo (E2EE) AES-GCM de 256 bits. Diseñado para 
+comunicaciones seguras, privadas y de baja latencia.
+
+CARACTERÍSTICAS DE LA VERSIÓN 14.5:
+-----------------------------------
+1. SEGURIDAD TOTAL: Cifrado en el cliente. El servidor nunca 
+   ve el audio real, solo datos cifrados.
+2. SISTEMA SOS PRO: Alerta de emergencia con tono sintético 
+   de 800Hz, vibración y aviso visual estroboscópico.
+3. NOISE GATE: Ahorro de datos inteligente. El sistema no 
+   transmite si no detecta voz (umbral ajustable).
+4. ERGONOMÍA MÓVIL: Botón PTT elevado para evitar conflictos 
+   con las barras de navegación de iOS/Android.
+5. LISTA DE OPERADORES: Desplegable dinámico en tiempo real.
+
+GUÍA DE INSTALACIÓN (SERVIDOR):
+-------------------------------
+1. Instalar dependencias: npm install express socket.io helmet
+2. Ejecutar: node server.js
+3. Exponer con Cloudflare: cloudflared tunnel --url http://localhost:3000
+
+GUÍA DE OPERACIÓN (USUARIO):
+----------------------------
+- El envío de mensajes de texto se activa con la tecla 'ENTER'.
+- El botón SOS requiere 2 segundos de presión para activarse.
+- Use el icono de la batería para desactivar las ondas y ahorrar energía.
+
+AVISO LEGAL:
 ------------
-Aplicación de comunicación por voz en tiempo real (Push-to-Talk) 
-con arquitectura basada en WebSockets, capaz de gestionar múltiples 
-salas independientes con cifrado por contraseña de acceso.
-
-ESTADO DEL PROYECTO: v13.0 (Glassmorphism & Multi-Room)
-TECNOLOGÍAS: Node.js, Socket.io, Web Audio API, Cloudflare Tunnel.
-
-NUEVAS FUNCIONALIDADES (v13):
-----------------------------
-1. ARQUITECTURA DE SALAS (ROOMS):
-   El servidor ahora actúa como una centralita. El audio y texto 
-   de una sala son invisibles para el resto de frecuencias.
-
-2. SEGURIDAD REFORZADA:
-   - Autenticación por sala: Cada canal requiere su propia clave.
-   - Sanitización XSS: Protección total contra inyección de código 
-     en el chat mediante renderizado de texto plano.
-   - Control de Buffer: Límite de 1MB por paquete de audio para 
-     prevenir ataques de denegación de servicio (DoS).
-
-3. INTERFAZ GLASSMORPHISM:
-   - Diseño capacitativo: Se adapta automáticamente a dispositivos 
-     móviles y escritorio.
-   - Feedback Visual: Osciloscopio de audio mejorado y botón PTT 
-     con animación de pulso dinámico.
-
-REQUERIMIENTOS TÉCNICOS:
-------------------------
-- Servidor: Node.js v18 o superior.
-- Cliente: Navegador compatible con Web Audio API (Chrome, Safari, Edge).
-- Conectividad: Requiere túnel HTTPS para capturar audio (Micrófono).
-
-GUÍA DE INSTALACIÓN RÁPIDA:
----------------------------
-1. En el servidor (VM Linux):
-   $ npm install express socket.io
-   $ node server.js
-
-2. Configurar el túnel (Cloudflare):
-   $ cloudflared tunnel --url http://localhost:3000
-
-3. Configurar el cliente:
-   - Copiar la URL generada por Cloudflare en 'index.html'.
-   - Subir cambios a GitHub Pages.
-
-GUÍA DE OPERACIÓN:
-------------------
-- ID OPERADOR: Tu apodo en la frecuencia.
-- CANAL: Nombre de la sala (Ej: ALPHA-1).
-- PASSWORD: Clave acordada para esa sala específica.
-
-SOLUCIÓN DE PROBLEMAS (FAQ):
-----------------------------
-- Error EADDRINUSE: El puerto 3000 está ocupado. 
-  Solución: 'sudo fuser -k 3000/tcp'.
-- Micrófono no funciona: Asegúrate de que la URL de acceso 
-  comience estrictamente por https://.
-- ERR_NAME_NOT_RESOLVED: La URL de Cloudflare ha caducado o 
-  el túnel se ha cerrado. Reinicia el proceso y actualiza la URL.
-
-----------------------------------------------------------------
-Desarrollado como Prueba de Concepto (POC) para comunicaciones
-críticas y experimentación con Web Audio API.
+Proyecto educativo de ingeniería. No apto para emergencias reales.
+El desarrollador no se hace responsable del uso de la herramienta.
 ================================================================
