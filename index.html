@@ -528,22 +528,24 @@
         <div class="auth-logo">⬡ PHANTOM</div>
         <div class="auth-version">SECURE RADIO V17.0</div>
 
-        <div class="auth-field">
-            <label>ID OPERADOR</label>
-            <input class="auth-input" type="text" id="nick-in" placeholder="CALLSIGN" autocomplete="off" spellcheck="false">
-        </div>
-        <div class="auth-field">
-            <label>CANAL</label>
-            <input class="auth-input" type="text" id="room-in" placeholder="SALA" autocomplete="off" spellcheck="false">
-        </div>
-        <div class="auth-field">
-            <label>CLAVE E2EE (LOCAL)</label>
-            <input class="auth-input" type="password" id="pass-in" placeholder="••••••••" autocomplete="off">
-        </div>
+        <form id="auth-form" onsubmit="startApp(); return false;" autocomplete="off">
+            <div class="auth-field">
+                <label>ID OPERADOR</label>
+                <input class="auth-input" type="text" id="nick-in" placeholder="CALLSIGN" autocomplete="username" spellcheck="false">
+            </div>
+            <div class="auth-field">
+                <label>CANAL</label>
+                <input class="auth-input" type="text" id="room-in" placeholder="SALA" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="auth-field">
+                <label>CLAVE E2EE (LOCAL)</label>
+                <input class="auth-input" type="password" id="pass-in" placeholder="••••••••" autocomplete="current-password">
+            </div>
 
-        <div id="auth-error"></div>
+            <div id="auth-error"></div>
 
-        <button class="auth-btn" onclick="startApp()">CONECTAR</button>
+            <button class="auth-btn" type="submit" id="connect-btn">CONECTAR</button>
+        </form>
 
         <p class="auth-note">
             MODO VOLÁTIL · CIFRADO AES-256-GCM LOCAL<br>
@@ -619,16 +621,12 @@
 //  9. Indicador visual "liberando canal..."
 // =================================================================
 
+// ⚠️ Reemplaza esta URL con la de tu servidor cloudflare/ngrok/etc.
 const SERVER = "https://subsection-aye-jpeg-paragraphs.trycloudflare.com";
 
-const socket = io(SERVER, {
-    transports: ['websocket', 'polling'],
-    reconnection: true,
-    reconnectionAttempts: Infinity,
-    reconnectionDelay: 1500,
-    reconnectionDelayMax: 8000,
-    timeout: 10000,
-});
+// FIX: socket se crea LAZY en startApp(), no al cargar la página.
+// Así evitamos que falle en silencio antes de que el usuario pulse CONECTAR.
+let socket = null;
 
 // Estado global
 let audioCtx, analyser, dataArray;
@@ -639,17 +637,141 @@ let micSource = null;
 let myNick = "";
 
 // Flags de estado del canal
-let isMicLocked = false;   // Canal ocupado (otro operador TX)
-let isTransmitting = false; // Yo estoy TX
-let isReceiving = false;    // Yo estoy RX
-let isRecording = false;    // MediaRecorder activo y grabando
+let isMicLocked = false;
+let isTransmitting = false;
+let isReceiving = false;
+let isRecording = false;
 
 // Cola de audio recibido (fix solapamiento)
 const audioQueue = [];
 let isPlayingAudio = false;
 
-// Destino permanente del analizador para monitoreo
+// Destino permanente del analizador
 let analyserDestination = null;
+
+// Registrar handlers de socket (se llama una vez al crear el socket)
+function setupSocketHandlers() {
+    socket.on('joined-success', () => {
+        document.getElementById('auth-overlay').style.display = 'none';
+        resetConnectBtn();
+        initMic();
+        startVisualizer();
+        appendSystemMsg("🔐 Canal cifrado establecido.");
+    });
+
+    socket.on('join-error', (msg) => {
+        resetConnectBtn();
+        document.getElementById('auth-error').textContent = `⚠ ${msg || 'ERROR AL UNIRSE AL CANAL'}`;
+    });
+
+    socket.on('connect_error', (err) => {
+        resetConnectBtn();
+        document.getElementById('auth-error').textContent = `⚠ NO SE PUEDE CONECTAR AL SERVIDOR`;
+        console.error('Socket connect error:', err.message);
+    });
+
+    socket.on('disconnect', () => {
+        const banner = document.getElementById('reconnect-banner');
+        if (banner) banner.style.display = 'block';
+        appendSystemMsg("⚠ Conexión perdida. Reconectando...");
+        if (isTransmitting) forceReleaseMic();
+    });
+
+    socket.on('reconnect', () => {
+        const banner = document.getElementById('reconnect-banner');
+        if (banner) banner.style.display = 'none';
+        appendSystemMsg("✓ Conexión reestablecida.");
+        const nick = document.getElementById('nick-in').value.trim();
+        const room = document.getElementById('room-in').value.trim();
+        if (nick && room) socket.emit('join-room', { nickname: nick, roomName: room });
+    });
+
+    socket.on('reconnect_attempt', (n) => {
+        const banner = document.getElementById('reconnect-banner');
+        if (banner) {
+            banner.style.display = 'block';
+            banner.textContent = `⟳ RECONECTANDO... (${n})`;
+        }
+    });
+
+    socket.on('channel-busy', (user) => {
+        isMicLocked = true;
+        document.getElementById('status-led').classList.add('busy');
+        const btn = document.getElementById('talk-btn');
+        if (user === myNick) {
+            btn.textContent = "● TRANSMITIENDO...";
+        } else {
+            btn.disabled = true;
+            btn.textContent = `▼ RX: ${escapeHtml(user)}`;
+            isReceiving = true;
+            setStatusText(`RX · ${escapeHtml(user)}`, "var(--sos)");
+        }
+    });
+
+    socket.on('channel-free', () => {
+        isMicLocked = false;
+        isReceiving = false;
+        document.getElementById('status-led').classList.remove('busy');
+        const btn = document.getElementById('talk-btn');
+        btn.disabled = false;
+        btn.textContent = "⬤ PULSAR PARA HABLAR";
+        setStatusText("IDLE", "var(--text-dim)");
+        setVizLabel("IDLE", "var(--text-dim)");
+        playRoger();
+    });
+
+    socket.on('audio-stream', async (d) => {
+        try {
+            const decrypted = await crypto.subtle.decrypt(
+                { name: "AES-GCM", iv: new Uint8Array(d.buffer.iv) },
+                cryptoKey,
+                new Uint8Array(d.buffer.ciphertext)
+            );
+            const audioBuffer = await audioCtx.decodeAudioData(decrypted.slice(0));
+            audioQueue.push(audioBuffer);
+            if (!isPlayingAudio) drainAudioQueue();
+            setVizLabel("RX", "var(--sos)");
+        } catch (e) { /* clave diferente — silencio seguro */ }
+    });
+
+    socket.on('chat-message', (d) => {
+        const isSOS = d.text && d.text.startsWith('🚨');
+        appendMsg(d.user, d.text, isSOS);
+        if (isSOS) playEmergencyAlarm();
+    });
+
+    socket.on('user-list', (list) => {
+        document.getElementById('user-toggle').textContent = `OPS: ${list.length}`;
+        const names = document.getElementById('user-names');
+        names.innerHTML = '';
+        list.forEach(u => {
+            const item = document.createElement('div');
+            item.className = u === myNick ? 'user-item me' : 'user-item';
+            const dot = document.createElement('div');
+            dot.className = 'user-dot';
+            item.appendChild(dot);
+            const name = document.createElement('span');
+            name.textContent = u + (u === myNick ? ' (tú)' : '');
+            item.appendChild(name);
+            names.appendChild(item);
+        });
+    });
+
+    socket.on('user-joined', (nick) => {
+        appendSystemMsg(`→ ${nick} se ha unido al canal`);
+        playJoinTone();
+    });
+
+    socket.on('user-left', (nick) => {
+        appendSystemMsg(`← ${nick} ha salido del canal`);
+    });
+}
+
+function resetConnectBtn() {
+    const btn = document.getElementById('connect-btn');
+    btn.disabled = false;
+    btn.textContent = 'CONECTAR';
+}
 
 
 // =================================================================
@@ -671,13 +793,14 @@ async function deriveKey(password) {
 
 
 // =================================================================
-//  ARRANQUE DE LA APLICACIÓN
+//  ARRANQUE DE LA APLICACIÓN — socket se crea aquí, no al cargar
 // =================================================================
 async function startApp() {
     const nick = document.getElementById('nick-in').value.trim();
     const room = document.getElementById('room-in').value.trim();
     const pass = document.getElementById('pass-in').value;
     const errEl = document.getElementById('auth-error');
+    const btn   = document.getElementById('connect-btn');
 
     errEl.textContent = "";
 
@@ -686,69 +809,72 @@ async function startApp() {
         return;
     }
 
+    // Feedback visual inmediato
+    btn.disabled = true;
+    btn.textContent = "DERIVANDO CLAVE...";
+
     try {
         cryptoKey = await deriveKey(pass);
     } catch(e) {
         errEl.textContent = "⚠ ERROR AL GENERAR CLAVE";
+        resetConnectBtn();
         return;
     }
 
     myNick = nick;
-
-    // FIX SEGURIDAD: Solo enviamos nick y sala. La clave E2EE se queda local.
-    socket.emit('join-room', { nickname: nick, roomName: room });
-
     document.getElementById('callsign-display').innerHTML = `<span>ID /</span> ${escapeHtml(nick)}`;
 
-    // Inicializar AudioContext al primer gesto de usuario (política de navegadores)
+    btn.textContent = "CONECTANDO...";
+
+    // Crear AudioContext aquí (gesto de usuario requerido por navegadores)
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 512;
     analyser.smoothingTimeConstant = 0.75;
     dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-    // Destino del analizador conectado a la salida
     analyserDestination = audioCtx.createGain();
     analyserDestination.gain.value = 1.0;
     analyserDestination.connect(audioCtx.destination);
     analyser.connect(analyserDestination);
+
+    // FIX: Crear socket AHORA (lazy), no al cargar la página
+    // Así el error de conexión se muestra al usuario en lugar de fallar silenciosamente
+    if (socket) {
+        // Si ya existe (ej. reintento), reutilizarlo
+        socket.emit('join-room', { nickname: nick, roomName: room });
+        return;
+    }
+
+    socket = io(SERVER, {
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1500,
+        reconnectionDelayMax: 8000,
+        timeout: 10000,
+    });
+
+    setupSocketHandlers();
+
+    // Timeout de 12s: si no conecta, mostrar error claro
+    const connTimeout = setTimeout(() => {
+        if (document.getElementById('auth-overlay').style.display !== 'none') {
+            errEl.textContent = "⚠ TIEMPO AGOTADO. Verifica la URL del servidor.";
+            resetConnectBtn();
+        }
+    }, 12000);
+
+    // Limpiar timeout si conecta OK
+    socket.once('joined-success', () => clearTimeout(connTimeout));
+    socket.once('connect_error',  () => clearTimeout(connTimeout));
+
+    socket.emit('join-room', { nickname: nick, roomName: room });
 }
 
-socket.on('joined-success', () => {
-    document.getElementById('auth-overlay').style.display = 'none';
-    initMic();
-    startVisualizer();
-    appendSystemMsg("🔐 Canal cifrado establecido.");
-});
-
-socket.on('join-error', (msg) => {
-    document.getElementById('auth-error').textContent = `⚠ ${msg || 'ERROR AL UNIRSE'}`;
-});
-
 
 // =================================================================
-//  RECONEXIÓN AUTOMÁTICA (FIX NUEVO)
+//  RECONEXIÓN AUTOMÁTICA — manejada dentro de setupSocketHandlers()
 // =================================================================
-socket.on('disconnect', () => {
-    document.getElementById('reconnect-banner').style.display = 'block';
-    appendSystemMsg("⚠ Conexión perdida. Reconectando...");
-    // Liberar mic si estaba transmitiendo
-    if (isTransmitting) forceReleaseMic();
-});
-
-socket.on('reconnect', () => {
-    document.getElementById('reconnect-banner').style.display = 'none';
-    appendSystemMsg("✓ Conexión reestablecida.");
-    // Re-join automático
-    const nick = document.getElementById('nick-in').value.trim();
-    const room = document.getElementById('room-in').value.trim();
-    if (nick && room) socket.emit('join-room', { nickname: nick, roomName: room });
-});
-
-socket.on('reconnect_attempt', (n) => {
-    document.getElementById('reconnect-banner').style.display = 'block';
-    document.getElementById('reconnect-banner').textContent = `⟳ RECONECTANDO... (${n})`;
-});
 
 
 // =================================================================
@@ -856,58 +982,8 @@ function getSupportedMimeType() {
 
 
 // =================================================================
-//  AUDIO — GESTIÓN CANAL (RX)
+//  AUDIO — GESTIÓN CANAL (RX) — manejado en setupSocketHandlers()
 // =================================================================
-socket.on('channel-busy', (user) => {
-    isMicLocked = true;
-    document.getElementById('status-led').classList.add('busy');
-
-    const btn = document.getElementById('talk-btn');
-    if (user === myNick) {
-        // Nuestra propia TX confirmada
-        btn.textContent = "● TRANSMITIENDO...";
-    } else {
-        btn.disabled = true;
-        btn.textContent = `▼ RX: ${escapeHtml(user)}`;
-        isReceiving = true;
-        setStatusText(`RX · ${escapeHtml(user)}`, "var(--sos)");
-    }
-});
-
-socket.on('channel-free', () => {
-    isMicLocked = false;
-    isReceiving = false;
-    document.getElementById('status-led').classList.remove('busy');
-
-    const btn = document.getElementById('talk-btn');
-    btn.disabled = false;
-    btn.textContent = "⬤ PULSAR PARA HABLAR";
-    setStatusText("IDLE", "var(--text-dim)");
-    setVizLabel("IDLE", "var(--text-dim)");
-    playRoger();
-});
-
-// FIX MEMORY LEAK: Usamos AudioBuffer en lugar de MediaElementSource
-// Cada audio decodificado se agrega a una cola y se reproduce secuencialmente
-socket.on('audio-stream', async (d) => {
-    try {
-        const decrypted = await crypto.subtle.decrypt(
-            { name: "AES-GCM", iv: new Uint8Array(d.buffer.iv) },
-            cryptoKey,
-            new Uint8Array(d.buffer.ciphertext)
-        );
-
-        // Decodificar como AudioBuffer (no crea nodo permanente)
-        const audioBuffer = await audioCtx.decodeAudioData(decrypted.slice(0));
-        audioQueue.push(audioBuffer);
-
-        if (!isPlayingAudio) drainAudioQueue();
-
-        setVizLabel("RX", "var(--sos)");
-    } catch (e) {
-        // Si falla el descifrado significa clave diferente — silencio seguro
-    }
-});
 
 function drainAudioQueue() {
     if (audioQueue.length === 0) {
@@ -1085,12 +1161,6 @@ function sendMsg() {
     }
 }
 
-socket.on('chat-message', (d) => {
-    const isSOS = d.text && d.text.startsWith('🚨');
-    appendMsg(d.user, d.text, isSOS);
-    if (isSOS) playEmergencyAlarm();
-});
-
 function appendMsg(user, text, isSOS = false) {
     const chat = document.getElementById('chat');
     const div = document.createElement('div');
@@ -1146,41 +1216,12 @@ function appendSystemMsg(text) {
 
 
 // =================================================================
-//  OPERADORES CONECTADOS
+//  UTILIDADES
 // =================================================================
 function toggleUsers() {
     const panel = document.getElementById('user-panel');
     panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
 }
-
-socket.on('user-list', (list) => {
-    document.getElementById('user-toggle').textContent = `OPS: ${list.length}`;
-    const names = document.getElementById('user-names');
-    names.innerHTML = '';
-    list.forEach(u => {
-        const item = document.createElement('div');
-        item.className = u === myNick ? 'user-item me' : 'user-item';
-        item.innerHTML = `<div class="user-dot"></div>`;
-        const name = document.createElement('span');
-        name.textContent = u + (u === myNick ? ' (tú)' : '');
-        item.appendChild(name);
-        names.appendChild(item);
-    });
-});
-
-socket.on('user-joined', (nick) => {
-    appendSystemMsg(`→ ${nick} se ha unido al canal`);
-    playJoinTone();
-});
-
-socket.on('user-left', (nick) => {
-    appendSystemMsg(`← ${nick} ha salido del canal`);
-});
-
-
-// =================================================================
-//  UTILIDADES
-// =================================================================
 function getTime() {
     const now = new Date();
     return `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
