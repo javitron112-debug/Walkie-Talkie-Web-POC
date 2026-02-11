@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="icon" href="data:;base64,iVBORw0KGgo=">
-    <title>SECURE RADIO V16.3</title>
+    <title>SECURE RADIO V16.4</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         :root { --neon: #00ff41; --sos: #ff3131; --bg: #07070c; }
@@ -12,14 +12,12 @@
         
         .glass-container { width: 95%; max-width: 450px; height: 94vh; background: rgba(255,255,255,0.05); border-radius: 35px; display: flex; flex-direction: column; padding: 20px; box-sizing: border-box; margin-top: 10px; border: 1px solid #333; position: relative; }
         
-        /* Header y Controles Superiores */
         header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #222; padding-bottom: 10px; }
         .led-box { display: flex; align-items: center; gap: 8px; font-size: 10px; }
         #status-led { width: 10px; height: 10px; background: var(--neon); border-radius: 50%; box-shadow: 0 0 8px var(--neon); }
         .busy-led { background: var(--sos) !important; box-shadow: 0 0 12px var(--sos) !important; }
         .sos-btn { background: #400; color: var(--sos); border: 1px solid var(--sos); padding: 5px 10px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 11px; }
 
-        /* Desplegable de Usuarios */
         #user-toggle { background: none; border: none; color: #888; font-size: 10px; cursor: pointer; text-decoration: underline; }
         #user-list-box { position: absolute; top: 60px; left: 20px; right: 20px; background: rgba(10,10,20,0.95); border: 1px solid var(--neon); border-radius: 15px; padding: 15px; z-index: 100; display: none; }
 
@@ -27,12 +25,14 @@
         .msg { background: #111; padding: 10px; border-radius: 10px; margin-bottom: 8px; border-left: 3px solid var(--neon); }
         .msg-sos { border-left-color: var(--sos); background: #200; }
 
-        .viz-box { height: 50px; background: #000; border-radius: 12px; margin-bottom: 10px; border: 1px solid #444; overflow: hidden; }
-        
+        /* Visualizador RX/TX */
+        .viz-box { height: 70px; background: #000; border-radius: 15px; margin-bottom: 10px; border: 1px solid #444; overflow: hidden; position: relative; }
+        canvas { width: 100%; height: 100%; }
+        #mode-id { position: absolute; top: 5px; right: 10px; font-size: 8px; font-weight: bold; color: #444; text-transform: uppercase; }
+
         .input-bar { display: flex; gap: 8px; margin-bottom: 10px; }
         input { background: #000; border: 1px solid #333; color: white; padding: 12px; border-radius: 12px; flex: 1; outline: none; }
 
-        /* PTT con aire inferior */
         .ptt-container { padding-bottom: 30px; }
         #talk-btn { width: 100%; padding: 25px; border-radius: 25px; border: none; background: #222; color: white; font-weight: bold; font-size: 18px; cursor: pointer; touch-action: none; transition: 0.2s; border: 1px solid #444; }
         #talk-btn.active { background: var(--sos); box-shadow: 0 0 20px rgba(255, 49, 49, 0.4); }
@@ -45,7 +45,7 @@
 
     <div id="auth-overlay">
         <div class="card">
-            <h2 style="color: var(--neon);">COMMANDER V16.3</h2>
+            <h2 style="color: var(--neon);">COMMANDER V16.4</h2>
             <input type="text" id="nick-in" placeholder="ID OPERADOR">
             <input type="text" id="room-in" placeholder="CANAL">
             <input type="password" id="pass-in" placeholder="CLAVE E2EE">
@@ -62,14 +62,13 @@
             <button id="sos-btn" class="sos-btn">⚠️ SOS</button>
         </header>
 
-        <div id="user-list-box">
-            <h4 style="margin:0 0 10px 0; font-size:10px;">EN FRECUENCIA:</h4>
-            <div id="user-names" style="color:var(--neon); font-size:12px;"></div>
-        </div>
-
+        <div id="user-list-box"><div id="user-names"></div></div>
         <div id="chat"></div>
         
-        <div class="viz-box"><canvas id="visualizer"></canvas></div>
+        <div class="viz-box">
+            <div id="mode-id">Frecuencia IDLE</div>
+            <canvas id="visualizer"></canvas>
+        </div>
 
         <div class="input-bar">
             <input type="text" id="msg-in" placeholder="Escribir..." onkeydown="if(event.key==='Enter') sendMsg()">
@@ -86,63 +85,33 @@
         let audioCtx, analyser, dataArray, cryptoKey, mediaRecorder;
         let myNick = "";
         let isMicLocked = false;
-
-        // --- PERSISTENCIA CHAT ---
-        const loadHistory = () => {
-            const history = JSON.parse(localStorage.getItem('radio_history') || '[]');
-            history.forEach(m => addMsgUI(m.user, m.text, false));
-        };
-        const saveMsg = (user, text) => {
-            const history = JSON.parse(localStorage.getItem('radio_history') || '[]');
-            history.push({ user, text });
-            if(history.length > 50) history.shift();
-            localStorage.setItem('radio_history', JSON.stringify(history));
-        };
+        let isReceiving = false;
 
         async function deriveKey(p) {
             const enc = new TextEncoder();
             const bk = await crypto.subtle.importKey("raw", enc.encode(p), "PBKDF2", false, ["deriveKey"]);
-            return crypto.subtle.deriveKey({ name: "PBKDF2", salt: enc.encode("radio-v16.3"), iterations: 100000, hash: "SHA-256" }, bk, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+            return crypto.subtle.deriveKey({ name: "PBKDF2", salt: enc.encode("radio-v16.4"), iterations: 100000, hash: "SHA-256" }, bk, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
         }
 
         async function startApp() {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            analyser = audioCtx.createAnalyser(); analyser.fftSize = 64;
+            analyser = audioCtx.createAnalyser(); 
+            analyser.fftSize = 256; // Mayor resolución para la onda
             dataArray = new Uint8Array(analyser.frequencyBinCount);
+            
             myNick = document.getElementById('nick-in').value;
             cryptoKey = await deriveKey(document.getElementById('pass-in').value);
             socket.emit('join-room', { nickname: myNick, roomName: document.getElementById('room-in').value, password: document.getElementById('pass-in').value });
             loadHistory();
         }
 
-        socket.on('joined-success', d => {
+        socket.on('joined-success', () => {
             document.getElementById('auth-overlay').style.display = 'none';
-            initPTT(); draw();
+            initPTT(); 
+            draw();
         });
 
-        // --- SOS CON GEOLOCALIZACIÓN ---
-        const sosBtn = document.getElementById('sos-btn');
-        sosBtn.onclick = () => {
-            if(!confirm("¿ENVIAR ALERTA SOS?")) return;
-            navigator.geolocation.getCurrentPosition(pos => {
-                const mapLink = `https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}`;
-                socket.emit('chat-message', `🚨 SOS ACTIVADO: ${mapLink}`);
-            }, () => {
-                socket.emit('chat-message', `🚨 SOS ACTIVADO (Sin GPS)`);
-            });
-        };
-
-        // --- OPERADORES ONLINE ---
-        function toggleUsers() {
-            const box = document.getElementById('user-list-box');
-            box.style.display = box.style.display === 'block' ? 'none' : 'block';
-        }
-        socket.on('user-list', list => {
-            document.getElementById('user-toggle').innerText = `OPERADORES: ${list.length}`;
-            document.getElementById('user-names').innerHTML = list.map(u => `• ${u}`).join('<br>');
-        });
-
-        // --- TURNOS Y ROGER BEEP ---
+        // --- ROGER BEEP ---
         function playRoger() {
             const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
             o.frequency.value = 1100; g.gain.setValueAtTime(0.05, audioCtx.currentTime);
@@ -153,33 +122,45 @@
         socket.on('channel-busy', user => {
             isMicLocked = true;
             document.getElementById('status-led').classList.add('busy-led');
+            document.getElementById('talk-btn').innerText = user === myNick ? "TRANSMITIENDO" : `OCUPADO: ${user}`;
             if(user !== myNick) {
                 document.getElementById('talk-btn').disabled = true;
-                document.getElementById('talk-btn').innerText = `OCUPADO: ${user}`;
+                document.getElementById('mode-id').innerText = "Recibiendo Señal";
+                document.getElementById('mode-id').style.color = "var(--sos)";
+                isReceiving = true;
             }
         });
 
         socket.on('channel-free', () => {
             isMicLocked = false;
+            isReceiving = false;
             document.getElementById('status-led').classList.remove('busy-led');
             document.getElementById('talk-btn').disabled = false;
             document.getElementById('talk-btn').innerText = "PULSAR PARA HABLAR";
+            document.getElementById('mode-id').innerText = "Frecuencia IDLE";
+            document.getElementById('mode-id').style.color = "#444";
             playRoger();
         });
 
-        // --- AUDIO ENGINE ---
+        // --- MOTOR DE AUDIO ---
         function initPTT() {
             navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
                 const source = audioCtx.createMediaStreamSource(stream);
-                source.connect(analyser);
+                // Solo conectamos el micro al analizador si estamos hablando nosotros
                 const btn = document.getElementById('talk-btn');
 
                 btn.onmousedown = btn.ontouchstart = (e) => {
                     if(e.cancelable) e.preventDefault();
                     if(isMicLocked) return;
                     if(audioCtx.state === 'suspended') audioCtx.resume();
+                    
+                    document.getElementById('mode-id').innerText = "Transmitiendo...";
+                    document.getElementById('mode-id').style.color = "var(--neon)";
+                    
+                    source.connect(analyser); // Ver nuestras barras
                     socket.emit('request-mic');
                     btn.classList.add('active');
+                    
                     mediaRecorder = new MediaRecorder(stream);
                     mediaRecorder.ondataavailable = async ev => {
                         if (ev.data.size > 100) {
@@ -194,7 +175,10 @@
 
                 btn.onmouseup = btn.ontouchend = () => {
                     if(mediaRecorder && mediaRecorder.state !== 'inactive') {
-                        mediaRecorder.stop(); socket.emit('release-mic'); btn.classList.remove('active');
+                        mediaRecorder.stop();
+                        socket.emit('release-mic');
+                        btn.classList.remove('active');
+                        source.disconnect(analyser); // Dejar de ver nuestro micro
                     }
                 };
             });
@@ -204,34 +188,62 @@
             try {
                 const dec = await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(d.buffer.iv) }, cryptoKey, new Uint8Array(d.buffer.ciphertext));
                 const audio = new Audio(URL.createObjectURL(new Blob([dec], { type: 'audio/webm; codecs=opus' })));
+                
+                // CONEXIÓN DEL AUDIO RECIBIDO AL ANALIZADOR
+                const audioSrc = audioCtx.createMediaElementSource(audio);
+                audioSrc.connect(analyser); // ESTO ES LO QUE HACE QUE SE MUEVA LA ONDA AL RECIBIR
+                analyser.connect(audioCtx.destination);
+                
                 audio.play();
             } catch(e) {}
         });
 
-        // --- CHAT ---
-        function sendMsg() {
-            const i = document.getElementById('msg-in');
-            if(i.value.trim()) { socket.emit('chat-message', i.value); i.value = ""; }
-        }
-        socket.on('chat-message', d => { addMsgUI(d.user, d.text, true); });
-        function addMsgUI(user, text, save) {
-            const c = document.getElementById('chat');
-            const div = document.createElement('div');
-            div.className = text.includes('🚨') ? 'msg msg-sos' : 'msg';
-            div.innerHTML = `<b>${user}:</b> ${text}`;
-            c.appendChild(div); c.scrollTop = c.scrollHeight;
-            if(save) saveMsg(user, text);
+        // --- VISUALIZADOR BI-MODAL (BARRAS / ONDA) ---
+        function draw() {
+            requestAnimationFrame(draw);
+            const c = document.getElementById('visualizer');
+            const ctx = c.getContext('2d');
+            analyser.getByteTimeDomainData(dataArray); // Datos de onda para RX
+
+            ctx.clearRect(0, 0, c.width, c.height);
+            
+            if (isReceiving) {
+                // MODO RECEPCIÓN: Onda senoidal
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#ff3131';
+                ctx.beginPath();
+                let sliceWidth = c.width * 1.0 / analyser.frequencyBinCount;
+                let x = 0;
+                for(let i = 0; i < analyser.frequencyBinCount; i++) {
+                    let v = dataArray[i] / 128.0;
+                    let y = v * c.height / 2;
+                    if(i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                    x += sliceWidth;
+                }
+                ctx.lineTo(c.width, c.height / 2);
+                ctx.stroke();
+            } else {
+                // MODO TRANSMISIÓN/IDLE: Barras clásicas
+                analyser.getByteFrequencyData(dataArray);
+                let x = 0;
+                let barWidth = (c.width / analyser.frequencyBinCount) * 2.5;
+                dataArray.forEach(v => {
+                    ctx.fillStyle = isMicLocked ? '#222' : `rgb(0, ${v + 100}, 65)`;
+                    ctx.fillRect(x, c.height - (v/2), barWidth - 1, v/2);
+                    x += barWidth;
+                });
+            }
         }
 
-        function draw() {
-            requestAnimationFrame(draw); analyser.getByteFrequencyData(dataArray);
-            const c = document.getElementById('visualizer'); const ctx = c.getContext('2d');
-            ctx.clearRect(0, 0, c.width, c.height);
-            dataArray.forEach((v, i) => {
-                ctx.fillStyle = `rgb(0, ${v + 100}, 65)`;
-                ctx.fillRect(i*12, c.height - (v/2), 10, v/2);
-            });
-        }
+        // --- AUXILIARES ---
+        function sendMsg() { const i = document.getElementById('msg-in'); if(i.value.trim()){ socket.emit('chat-message', i.value); i.value = ""; } }
+        socket.on('chat-message', d => { addMsgUI(d.user, d.text, true); });
+        function addMsgUI(u, t, s) { const c = document.getElementById('chat'); const div = document.createElement('div'); div.className = t.includes('🚨') ? 'msg msg-sos' : 'msg'; div.innerHTML = `<b>${u}:</b> ${t}`; c.appendChild(div); c.scrollTop = c.scrollHeight; if(s) saveMsg(u,t); }
+        const saveMsg = (u,t) => { const h = JSON.parse(localStorage.getItem('radio_history') || '[]'); h.push({u,t}); if(h.length>50) h.shift(); localStorage.setItem('radio_history', JSON.stringify(h)); };
+        const loadHistory = () => { const h = JSON.parse(localStorage.getItem('radio_history') || '[]'); h.forEach(m => addMsgUI(m.u, m.t, false)); };
+        function toggleUsers() { const box = document.getElementById('user-list-box'); box.style.display = box.style.display === 'block' ? 'none' : 'block'; }
+        socket.on('user-list', list => { document.getElementById('user-toggle').innerText = `OPERADORES: ${list.length}`; document.getElementById('user-names').innerHTML = list.map(u => `• ${u}`).join('<br>'); });
     </script>
 </body>
 </html>
