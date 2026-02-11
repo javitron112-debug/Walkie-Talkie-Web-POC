@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="icon" href="data:;base64,iVBORw0KGgo=">
-    <title>PHANTOM V16.9.2</title>
+    <title>PHANTOM V16.9.3</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        :root { --neon: #00ff41; --sos: #ff3131; --ptt-orange: #ff8c00; --bg: #07070c; --warn: #ffcc00; }
+        :root { --neon: #00ff41; --sos: #ff3131; --ptt-orange: #ff8c00; --bg: #07070c; }
         body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; display: flex; justify-content: center; height: 100vh; overflow: hidden; }
         .glass-container { width: 95%; max-width: 450px; height: 94vh; background: rgba(255,255,255,0.05); border-radius: 35px; display: flex; flex-direction: column; padding: 20px; box-sizing: border-box; margin-top: 10px; border: 1px solid #333; position: relative; }
         header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #222; padding-bottom: 10px; }
@@ -15,7 +15,6 @@
         #status-led { width: 10px; height: 10px; background: var(--neon); border-radius: 50%; box-shadow: 0 0 8px var(--neon); }
         .busy-led { background: var(--sos) !important; box-shadow: 0 0 12px var(--sos) !important; }
         #latency-tag { font-size: 9px; font-family: monospace; color: var(--neon); }
-        .sos-btn { background: #400; color: var(--sos); border: 1px solid var(--sos); padding: 8px 15px; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 12px; }
         #chat { flex: 1; overflow-y: auto; margin-bottom: 10px; font-size: 13px; scroll-behavior: smooth; }
         .msg { background: #111; padding: 10px; border-radius: 10px; margin-bottom: 8px; border-left: 3px solid var(--neon); }
         .viz-box { height: 70px; background: #000; border-radius: 15px; margin-bottom: 10px; border: 1px solid #444; overflow: hidden; position: relative; }
@@ -24,17 +23,18 @@
         #talk-btn.active { background: var(--sos); color: white; }
         #auth-overlay { position: fixed; inset: 0; background: #000; display: flex; justify-content: center; align-items: center; z-index: 1000; }
         .card { background: #111; padding: 30px; border-radius: 25px; border: 1px solid var(--neon); text-align: center; width: 280px; }
-        input { background: #000; border: 1px solid #333; color: white; padding: 12px; border-radius: 12px; width: 90%; margin-bottom: 10px; }
+        input { background: #000; border: 1px solid #333; color: white; padding: 12px; border-radius: 12px; width: 90%; margin-bottom: 10px; outline: none; }
+        input:focus { border-color: var(--neon); }
     </style>
 </head>
 <body>
 
     <div id="auth-overlay">
-        <form class="card" onsubmit="event.preventDefault(); startApp();">
-            <h2 style="color: var(--neon);">PHANTOM V16.9.2</h2>
-            <input type="text" id="nick-in" placeholder="ID OPERADOR" autocomplete="username">
-            <input type="text" id="room-in" placeholder="CANAL">
-            <input type="password" id="pass-in" placeholder="CLAVE E2EE" autocomplete="current-password">
+        <form class="card" onsubmit="event.preventDefault(); startApp();" autocomplete="on">
+            <h2 style="color: var(--neon);">PHANTOM V16.9.3</h2>
+            <input type="text" id="nick-in" placeholder="ID OPERADOR" autocomplete="username" required>
+            <input type="text" id="room-in" placeholder="CANAL" autocomplete="section-channel" required>
+            <input type="password" id="pass-in" placeholder="CLAVE E2EE" autocomplete="current-password" required>
             <button type="submit" style="width:100%; padding:15px; background:var(--neon); border:none; border-radius:12px; margin-top:10px; font-weight:bold; cursor:pointer; color:black;">CONECTAR</button>
         </form>
     </div>
@@ -46,7 +46,7 @@
                 <button id="user-toggle" onclick="toggleUsers()" style="background:none;border:none;color:#888;font-size:10px;text-decoration:underline;cursor:pointer;">OPERADORES: 0</button>
             </div>
             <div id="latency-tag">LAT: -- ms</div>
-            <button class="sos-btn" onclick="sendSOS()">⚠️ SOS</button>
+            <button class="sos-btn" onclick="sendSOS()" style="background:#400;color:var(--sos);border:1px solid var(--sos);padding:8px 15px;border-radius:10px;font-weight:bold;cursor:pointer;font-size:12px;">⚠️ SOS</button>
         </header>
 
         <div id="user-list-box" style="position: absolute; top: 75px; left: 20px; right: 20px; background: rgba(10,10,20,0.95); border: 1px solid var(--neon); border-radius: 15px; padding: 15px; z-index: 100; display: none;">
@@ -57,7 +57,7 @@
         <div class="viz-box"><div id="mode-id">IDLE</div><canvas id="visualizer"></canvas></div>
         
         <div style="display:flex; gap:8px; margin-bottom:10px;">
-            <input type="text" id="msg-in" placeholder="Mensaje..." onkeydown="if(event.key==='Enter') sendMsg()" style="flex:1; margin-bottom:0;">
+            <input type="text" id="msg-in" placeholder="Mensaje..." onkeydown="if(event.key==='Enter') sendMsg()" style="flex:1; margin-bottom:0;" autocomplete="off">
             <button onclick="sendMsg()" style="background:var(--neon);border:none;border-radius:10px;width:45px;font-weight:bold;color:black;">></button>
         </div>
         
@@ -65,7 +65,7 @@
     </div>
 
     <script>
-        const SERVER = "https://label-durable-bomb-offices.trycloudflare.com"; 
+        const SERVER = "https://slot-johnston-shared-perry.trycloudflare.com"; 
         const socket = io(SERVER, { transports: ['polling'] });
 
         let audioCtx, analyser, dataArray, cryptoKey, mediaRecorder, micSource, mainGain;
@@ -78,15 +78,25 @@
         }
 
         async function startApp() {
-            if(!audioCtx) {
+            // FORCE AUDIO RESUME: Vital para navegadores móviles
+            if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                mainGain = audioCtx.createGain(); mainGain.connect(audioCtx.destination);
-                analyser = audioCtx.createAnalyser(); analyser.fftSize = 256;
+                mainGain = audioCtx.createGain(); 
+                mainGain.connect(audioCtx.destination);
+                analyser = audioCtx.createAnalyser(); 
+                analyser.fftSize = 256;
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
             }
+            
+            if (audioCtx.state === 'suspended') await audioCtx.resume();
+            
             myNick = document.getElementById('nick-in').value;
             cryptoKey = await deriveKey(document.getElementById('pass-in').value);
-            socket.emit('join-room', { nickname: myNick, roomName: document.getElementById('room-in').value, password: document.getElementById('pass-in').value });
+            socket.emit('join-room', { 
+                nickname: myNick, 
+                roomName: document.getElementById('room-in').value, 
+                password: document.getElementById('pass-in').value 
+            });
             startLatencyMonitor();
         }
 
@@ -101,7 +111,11 @@
             }, 3000);
         }
 
-        socket.on('joined-success', () => { document.getElementById('auth-overlay').style.display = 'none'; initMic(); draw(); });
+        socket.on('joined-success', () => { 
+            document.getElementById('auth-overlay').style.display = 'none'; 
+            initMic(); 
+            draw(); 
+        });
 
         socket.on('user-list', list => {
             const toggleBtn = document.getElementById('user-toggle');
@@ -119,15 +133,17 @@
                 micSource = audioCtx.createMediaStreamSource(stream);
                 const btn = document.getElementById('talk-btn');
 
-                const startPTT = (e) => {
+                const startPTT = async (e) => {
                     if(e.cancelable) e.preventDefault();
                     if(isMicLocked) return;
-                    if(audioCtx.state === 'suspended') audioCtx.resume();
-                    mainGain.gain.value = 0;
+                    if(audioCtx.state === 'suspended') await audioCtx.resume();
+                    
+                    mainGain.gain.setValueAtTime(0, audioCtx.currentTime); // Anti-feedback
                     micSource.connect(analyser); 
                     socket.emit('request-mic');
                     btn.classList.add('active');
-                    mediaRecorder = new MediaRecorder(stream);
+                    
+                    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
                     mediaRecorder.ondataavailable = async ev => {
                         if (ev.data.size > 100) {
                             const buffer = await ev.data.arrayBuffer();
@@ -141,27 +157,36 @@
 
                 const stopPTT = () => {
                     if(mediaRecorder && mediaRecorder.state !== 'inactive') {
-                        mediaRecorder.stop(); socket.emit('release-mic'); btn.classList.remove('active');
-                        micSource.disconnect(analyser); mainGain.gain.value = 1;
+                        mediaRecorder.stop(); 
+                        socket.emit('release-mic'); 
+                        btn.classList.remove('active');
+                        micSource.disconnect(analyser); 
+                        mainGain.gain.setValueAtTime(1, audioCtx.currentTime);
                     }
                 };
 
-                // FIXED: Eventos con { passive: false } para evitar advertencia de scroll
                 btn.addEventListener('mousedown', startPTT);
                 btn.addEventListener('touchstart', startPTT, { passive: false });
                 btn.addEventListener('mouseup', stopPTT);
                 btn.addEventListener('touchend', stopPTT);
                 btn.addEventListener('mouseleave', stopPTT);
-            });
+            }).catch(err => alert("Error acceso micro: " + err));
         }
 
         socket.on('audio-stream', async d => {
             try {
+                if (audioCtx.state === 'suspended') await audioCtx.resume();
+                
                 const dec = await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(d.buffer.iv) }, cryptoKey, new Uint8Array(d.buffer.ciphertext));
-                const audio = new Audio(URL.createObjectURL(new Blob([dec], { type: 'audio/webm; codecs=opus' })));
+                const audioBlob = new Blob([dec], { type: 'audio/webm;codecs=opus' });
+                const audio = new Audio(URL.createObjectURL(audioBlob));
+                
                 const audioSrc = audioCtx.createMediaElementSource(audio);
-                audioSrc.connect(analyser); analyser.connect(mainGain); audio.play();
-            } catch(e) {}
+                audioSrc.connect(analyser); 
+                analyser.connect(mainGain); 
+                
+                audio.play().catch(e => console.warn("Auto-play bloqueado:", e));
+            } catch(e) { console.error("Fallo de audio/descifrado:", e); }
         });
 
         socket.on('channel-busy', user => {
@@ -208,7 +233,7 @@
         }
 
         function sendSOS() {
-            if(!confirm("¿SOS?")) return;
+            if(!confirm("¿CONFIRMAR SOS?")) return;
             navigator.geolocation.getCurrentPosition(pos => {
                 socket.emit('chat-message', `🚨 SOS: https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}`);
             }, () => socket.emit('chat-message', `🚨 SOS: Sin GPS`));
