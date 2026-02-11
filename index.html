@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="icon" href="data:;base64,iVBORw0KGgo=">
-    <title>PHANTOM V16.9.4</title>
+    <title>PHANTOM V16.9.5 | DEEP AUDIO</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         :root { --neon: #00ff41; --sos: #ff3131; --ptt-orange: #ff8c00; --bg: #07070c; }
@@ -18,7 +18,7 @@
         .msg { background: #111; padding: 10px; border-radius: 10px; margin-bottom: 8px; border-left: 3px solid var(--neon); }
         .viz-box { height: 70px; background: #000; border-radius: 15px; margin-bottom: 10px; border: 1px solid #444; overflow: hidden; position: relative; }
         #mode-id { position: absolute; top: 5px; right: 10px; font-size: 8px; font-weight: bold; color: #444; text-transform: uppercase; }
-        #talk-btn { width: 100%; padding: 25px; border-radius: 25px; border: none; background: var(--ptt-orange); color: black; font-weight: bold; font-size: 18px; cursor: pointer; touch-action: none; transition: 0.2s; }
+        #talk-btn { width: 100%; padding: 25px; border-radius: 25px; border: none; background: var(--ptt-orange); color: black; font-weight: bold; font-size: 18px; cursor: pointer; touch-action: none; transition: 0.1s; }
         #talk-btn.active { background: var(--sos); color: white; }
         #auth-overlay { position: fixed; inset: 0; background: #000; display: flex; justify-content: center; align-items: center; z-index: 1000; }
         .card { background: #111; padding: 30px; border-radius: 25px; border: 1px solid var(--neon); text-align: center; width: 280px; }
@@ -29,7 +29,7 @@
 
     <div id="auth-overlay">
         <form class="card" onsubmit="event.preventDefault(); startApp();" autocomplete="on">
-            <h2 style="color: var(--neon);">PHANTOM V16.9.4</h2>
+            <h2 style="color: var(--neon);">PHANTOM V16.9.5</h2>
             <input type="text" id="nick-in" placeholder="ID OPERADOR" autocomplete="username" required>
             <input type="text" id="room-in" placeholder="CANAL" autocomplete="off" required>
             <input type="password" id="pass-in" placeholder="CLAVE E2EE" autocomplete="current-password" required>
@@ -46,19 +46,10 @@
             <div id="latency-tag" style="font-size: 9px; font-family: monospace; color: var(--neon);">LAT: -- ms</div>
             <button class="sos-btn" onclick="sendSOS()" style="background:#400;color:var(--sos);border:1px solid var(--sos);padding:8px 15px;border-radius:10px;font-weight:bold;cursor:pointer;font-size:12px;">⚠️ SOS</button>
         </header>
-
-        <div id="user-list-box" style="position: absolute; top: 75px; left: 20px; right: 20px; background: rgba(10,10,20,0.95); border: 1px solid var(--neon); border-radius: 15px; padding: 15px; z-index: 100; display: none;">
-            <div id="user-names" style="color:var(--neon); font-size:12px;"></div>
-        </div>
-
+        <div id="user-list-box" style="position: absolute; top: 75px; left: 20px; right: 20px; background: rgba(10,10,20,0.95); border: 1px solid var(--neon); border-radius: 15px; padding: 15px; z-index: 100; display: none;"><div id="user-names" style="color:var(--neon); font-size:12px;"></div></div>
         <div id="chat"></div>
         <div class="viz-box"><div id="mode-id">IDLE</div><canvas id="visualizer"></canvas></div>
-        
-        <div style="display:flex; gap:8px; margin-bottom:10px;">
-            <input type="text" id="msg-in" placeholder="Mensaje..." onkeydown="if(event.key==='Enter') sendMsg()" style="flex:1; margin-bottom:0;">
-            <button onclick="sendMsg()" style="background:var(--neon);border:none;border-radius:10px;width:45px;font-weight:bold;color:black;">></button>
-        </div>
-        
+        <div style="display:flex; gap:8px; margin-bottom:10px;"><input type="text" id="msg-in" placeholder="Escribir..." onkeydown="if(event.key==='Enter') sendMsg()" style="flex:1; margin-bottom:0;"><button onclick="sendMsg()" style="background:var(--neon);border:none;border-radius:10px;width:45px;font-weight:bold;color:black;">></button></div>
         <div style="padding-bottom: 30px;"><button id="talk-btn">PULSAR PARA HABLAR</button></div>
     </div>
 
@@ -76,7 +67,6 @@
         }
 
         async function startApp() {
-            // Inicializar AudioContext inmediatamente al pulsar el botón de login
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 mainGain = audioCtx.createGain(); 
@@ -85,16 +75,10 @@
                 analyser.fftSize = 256;
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
             }
-            
             if (audioCtx.state === 'suspended') await audioCtx.resume();
-            
             myNick = document.getElementById('nick-in').value;
             cryptoKey = await deriveKey(document.getElementById('pass-in').value);
-            socket.emit('join-room', { 
-                nickname: myNick, 
-                roomName: document.getElementById('room-in').value, 
-                password: document.getElementById('pass-in').value 
-            });
+            socket.emit('join-room', { nickname: myNick, roomName: document.getElementById('room-in').value, password: document.getElementById('pass-in').value });
             startLatencyMonitor();
         }
 
@@ -110,20 +94,8 @@
 
         socket.on('joined-success', () => { 
             document.getElementById('auth-overlay').style.display = 'none'; 
-            initMic(); 
-            draw(); 
+            initMic(); draw(); 
         });
-
-        socket.on('user-list', list => {
-            const toggleBtn = document.getElementById('user-toggle');
-            if(toggleBtn) toggleBtn.innerText = `OPERADORES: ${list.length}`;
-            document.getElementById('user-names').innerHTML = list.map(u => `• ${u}`).join('<br>');
-        });
-
-        function toggleUsers() {
-            const box = document.getElementById('user-list-box');
-            box.style.display = box.style.display === 'block' ? 'none' : 'block';
-        }
 
         function initMic() {
             navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }).then(stream => {
@@ -134,13 +106,11 @@
                     if(e.cancelable) e.preventDefault();
                     if(isMicLocked) return;
                     if(audioCtx.state === 'suspended') await audioCtx.resume();
-                    
-                    mainGain.gain.setValueAtTime(0, audioCtx.currentTime); // Silencio local
+                    mainGain.gain.setValueAtTime(0, audioCtx.currentTime); 
                     micSource.connect(analyser); 
                     socket.emit('request-mic');
                     btn.classList.add('active');
-                    
-                    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+                    mediaRecorder = new MediaRecorder(stream);
                     mediaRecorder.ondataavailable = async ev => {
                         if (ev.data.size > 100) {
                             const buffer = await ev.data.arrayBuffer();
@@ -154,11 +124,8 @@
 
                 const stopPTT = () => {
                     if(mediaRecorder && mediaRecorder.state !== 'inactive') {
-                        mediaRecorder.stop(); 
-                        socket.emit('release-mic'); 
-                        btn.classList.remove('active');
-                        micSource.disconnect(analyser); 
-                        mainGain.gain.setValueAtTime(1, audioCtx.currentTime); // Restaurar salida
+                        mediaRecorder.stop(); socket.emit('release-mic'); btn.classList.remove('active');
+                        micSource.disconnect(analyser); mainGain.gain.setValueAtTime(1, audioCtx.currentTime);
                     }
                 };
 
@@ -172,30 +139,21 @@
 
         socket.on('audio-stream', async d => {
             try {
-                // IMPORTANTÍSIMO: Asegurar que el contexto está vivo al recibir
                 if (audioCtx.state === 'suspended') await audioCtx.resume();
                 
+                // DESCIFRADO
                 const dec = await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(d.buffer.iv) }, cryptoKey, new Uint8Array(d.buffer.ciphertext));
-                const audioBlob = new Blob([dec], { type: 'audio/webm;codecs=opus' });
-                const url = URL.createObjectURL(audioBlob);
                 
-                // MODO REPRODUCCIÓN FORZADA:
-                const audio = new Audio();
-                audio.src = url;
-                audio.crossOrigin = "anonymous";
-                
-                // Vincular al gráfico de audio para el visualizador
-                const audioSrc = audioCtx.createMediaElementSource(audio);
-                audioSrc.connect(analyser); 
-                analyser.connect(mainGain); // mainGain está conectado a audioCtx.destination
-                
-                const playPromise = audio.play();
-                if (playPromise !== undefined) {
-                    playPromise.catch(error => {
-                        console.warn("Reproducción bloqueada por el navegador. Interactúa con la página.");
-                    });
-                }
-            } catch(e) { console.error("Error en RX:", e); }
+                // DECODIFICACIÓN DIRECTA (Bye bye objeto Audio)
+                audioCtx.decodeAudioData(dec, (buffer) => {
+                    const source = audioCtx.createBufferSource();
+                    source.buffer = buffer;
+                    source.connect(analyser); // Para la onda roja
+                    analyser.connect(mainGain);
+                    source.start(0);
+                }, (e) => console.error("Error decodificando audio raw:", e));
+
+            } catch(e) { console.error("Error de descifrado:", e); }
         });
 
         socket.on('channel-busy', user => {
@@ -240,21 +198,16 @@
                 });
             }
         }
-
-        function sendSOS() {
-            if(!confirm("¿CONFIRMAR SOS?")) return;
-            navigator.geolocation.getCurrentPosition(pos => {
-                socket.emit('chat-message', `🚨 SOS: https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}`);
-            }, () => socket.emit('chat-message', `🚨 SOS: Sin GPS`));
-        }
-
-        function sendMsg() { const i = document.getElementById('msg-in'); if(i.value.trim()){ socket.emit('chat-message', i.value); i.value = ""; } }
-        socket.on('chat-message', d => { 
-            const c = document.getElementById('chat'); const div = document.createElement('div'); 
-            div.className = d.text.includes('🚨') ? 'msg msg-sos' : 'msg';
-            div.innerHTML = `<b>${d.user}:</b> ${d.text.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="color:#00ff41">$1</a>')}`;
-            c.appendChild(div); c.scrollTop = c.scrollHeight;
+        
+        socket.on('user-list', list => {
+            const toggleBtn = document.getElementById('user-toggle');
+            if(toggleBtn) toggleBtn.innerText = `OPERADORES: ${list.length}`;
+            document.getElementById('user-names').innerHTML = list.map(u => `• ${u}`).join('<br>');
         });
+        function toggleUsers() { const box = document.getElementById('user-list-box'); box.style.display = box.style.display === 'block' ? 'none' : 'block'; }
+        function sendSOS() { if(!confirm("¿SOS?")) return; navigator.geolocation.getCurrentPosition(pos => { socket.emit('chat-message', `🚨 SOS: https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}`); }); }
+        function sendMsg() { const i = document.getElementById('msg-in'); if(i.value.trim()){ socket.emit('chat-message', i.value); i.value = ""; } }
+        socket.on('chat-message', d => { const c = document.getElementById('chat'); const div = document.createElement('div'); div.className = d.text.includes('🚨') ? 'msg msg-sos' : 'msg'; div.innerHTML = `<b>${d.user}:</b> ${d.text.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="color:#00ff41">$1</a>')}`; c.appendChild(div); c.scrollTop = c.scrollHeight; });
     </script>
 </body>
 </html>
