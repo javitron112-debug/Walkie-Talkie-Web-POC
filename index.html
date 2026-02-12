@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="icon" href="data:;base64,iVBORw0KGgo=">
-    <title>PHANTOM RADIO V21.2 | Secure</title>
+    <title>PHANTOM RADIO V21.4 | Secure</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         :root { --neon: #00ff41; --sos: #ff3131; --ptt: #ff8c00; --bg: #07070c; }
@@ -17,23 +17,23 @@
         .msg { background: rgba(255,255,255,0.05); padding: 10px; border-radius: 15px; margin-bottom: 8px; font-size: 14px; border-left: 3px solid var(--neon); }
         .viz-box { height: 80px; background: #000; border-radius: 20px; margin-bottom: 15px; border: 1px solid #333; overflow: hidden; position: relative; }
         #mode-id { position: absolute; top: 5px; right: 12px; font-size: 10px; font-weight: bold; color: #444; z-index: 10; }
-        #talk-btn { width: 100%; padding: 40px 20px; border-radius: 30px; border: none; background: var(--ptt); color: black; font-weight: bold; font-size: 20px; touch-action: none; cursor: pointer; transition: 0.2s; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
-        #talk-btn.active { background: var(--sos); color: white; transform: scale(0.98); box-shadow: 0 0 20px var(--sos); }
-        #talk-btn:disabled { background: #222; color: #555; cursor: not-allowed; box-shadow: none; }
+        #talk-btn { width: 100%; padding: 40px 20px; border-radius: 30px; border: none; background: var(--ptt); color: black; font-weight: bold; font-size: 20px; touch-action: none; cursor: pointer; transition: 0.2s; }
+        #talk-btn.active { background: var(--sos); color: white; transform: scale(0.98); }
+        #talk-btn:disabled { background: #222; color: #555; cursor: not-allowed; }
         #auth-overlay { position: fixed; inset: 0; background: #000; display: flex; justify-content: center; align-items: center; z-index: 1000; }
         .card { background: #111; padding: 30px; border-radius: 30px; border: 1px solid var(--neon); text-align: center; width: 85%; max-width: 320px; }
-        input { background: #000; border: 1px solid #333; color: white; padding: 15px; border-radius: 15px; width: 90%; margin-bottom: 12px; font-size: 16px; outline: none; }
+        input { background: #000; border: 1px solid #333; color: white; padding: 15px; border-radius: 15px; width: 90%; margin-bottom: 12px; outline: none; }
     </style>
 </head>
 <body>
 
 <div id="auth-overlay">
     <div class="card">
-        <h2 style="color: var(--neon); margin-top: 0;">PHANTOM V21.2</h2>
-        <input type="text" id="nick-in" placeholder="ID OPERADOR" autocomplete="off">
+        <h2 style="color: var(--neon); margin-top: 0;">PHANTOM V21.4</h2>
+        <input type="text" id="nick-in" placeholder="ID OPERADOR">
         <input type="text" id="room-in" placeholder="CANAL">
-        <input type="password" id="pass-in" placeholder="CLAVE DE ACCESO">
-        <button onclick="startApp()" style="width:100%; padding:15px; background:var(--neon); border:none; border-radius:15px; font-weight:bold; cursor:pointer; font-size:16px;">CONECTAR</button>
+        <input type="password" id="pass-in" placeholder="CLAVE">
+        <button onclick="startApp()" style="width:100%; padding:15px; background:var(--neon); border:none; border-radius:15px; font-weight:bold; cursor:pointer;">CONECTAR</button>
     </div>
 </div>
 
@@ -43,7 +43,6 @@
             <div id="status-led"></div>
             <span id="user-count" style="font-size: 12px; color: #888;">OPERADORES: 0</span>
         </div>
-        <button onclick="sendSOS()" style="background:none; border: 1px solid var(--sos); color: var(--sos); padding: 5px 12px; border-radius: 10px; font-size: 12px; font-weight: bold;">SOS</button>
     </header>
 
     <div id="chat"></div>
@@ -64,8 +63,8 @@
 </div>
 
 <script>
-    // CAMBIA ESTA URL POR LA TUYA DE CLOUDFLARE CADA VEZ QUE REINICIES EL TÚNEL
-    const socket = io("https://qui-spine-heroes-miss.trycloudflare.com", { transports: ['websocket', 'polling'] });
+    // URL DE CLOUDFLARE
+    const socket = io("https://retention-ccd-anthropology-ambient.trycloudflare.com", { transports: ['websocket', 'polling'] });
 
     let audioCtx, mainGain, analyser, dataArray, cryptoKey, mediaRecorder, micSource;
     let myNick = "", isMicLocked = false, isReceiving = false;
@@ -105,13 +104,12 @@
 
             const startPTT = async (e) => {
                 if (e.cancelable) e.preventDefault();
-                if (isMicLocked) return; // BLOQUEO SI OTRO HABLA
+                if (isMicLocked) return;
                 if (audioCtx.state === 'suspended') await audioCtx.resume();
                 
                 mainGain.gain.setValueAtTime(0, audioCtx.currentTime); 
-                micSource.connect(analyser);
                 btn.classList.add('active');
-                socket.emit('request-mic'); // AVISAR AL SERVIDOR
+                socket.emit('request-mic');
 
                 mediaRecorder = new MediaRecorder(stream);
                 mediaRecorder.ondataavailable = async ev => {
@@ -128,21 +126,19 @@
             const stopPTT = () => {
                 if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                     mediaRecorder.stop();
-                    socket.emit('release-mic'); // LIBERAR CANAL
+                    socket.emit('release-mic');
                     btn.classList.remove('active');
-                    micSource.disconnect(analyser);
                     mainGain.gain.setValueAtTime(1, audioCtx.currentTime);
                 }
             };
 
             btn.addEventListener('touchstart', startPTT, { passive: false });
             btn.addEventListener('touchend', stopPTT, { passive: false });
-            btn.onmousedown = startPTT;
-            btn.onmouseup = stopPTT;
+            btn.onmousedown = startPTT; btn.onmouseup = stopPTT;
         });
     }
 
-    // GESTIÓN DE BLOQUEO DE CANAL (RECIBIDO DEL SERVIDOR)
+    // GESTIÓN DE BLOQUEO
     socket.on('channel-busy', user => {
         isMicLocked = true;
         const btn = document.getElementById('talk-btn');
@@ -158,8 +154,7 @@
     });
 
     socket.on('channel-free', () => {
-        isMicLocked = false;
-        isReceiving = false;
+        isMicLocked = false; isReceiving = false;
         const btn = document.getElementById('talk-btn');
         btn.disabled = false;
         btn.innerText = "PULSAR PARA HABLAR";
@@ -169,23 +164,20 @@
 
     socket.on('audio-stream', async d => {
         try {
-            // USAMOS LA LÓGICA EXACTA DE LA 16.7.2
             const dec = await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(d.buffer.iv) }, cryptoKey, new Uint8Array(d.buffer.ciphertext));
-            const blob = new Blob([dec], { type: 'audio/webm' });
-            const url = URL.createObjectURL(blob);
-            const audio = new Audio(url);
+            const audio = new Audio(URL.createObjectURL(new Blob([dec], { type: 'audio/webm' })));
             const source = audioCtx.createMediaElementSource(audio);
             source.connect(analyser); analyser.connect(mainGain);
             audio.play();
-            audio.onended = () => { URL.revokeObjectURL(url); };
-        } catch(e) { console.error("Error decript", e); }
+            audio.onended = () => { URL.revokeObjectURL(audio.src); };
+        } catch(e) { console.error("Error RX", e); }
     });
 
     socket.on('chat-message', d => {
         const div = document.createElement('div'); div.className = 'msg';
         div.innerHTML = `<b>${d.user}:</b> ${d.text}`;
-        const chat = document.getElementById('chat');
-        chat.appendChild(div); chat.scrollTop = chat.scrollHeight;
+        const c = document.getElementById('chat');
+        c.appendChild(div); c.scrollTop = c.scrollHeight;
     });
 
     socket.on('user-list', list => { document.getElementById('user-count').innerText = `OPERADORES: ${list.length}`; });
@@ -195,8 +187,6 @@
         const c = document.getElementById('visualizer'); const ctx = c.getContext('2d');
         c.width = c.offsetWidth; c.height = c.offsetHeight;
         ctx.clearRect(0,0,c.width,c.height);
-        
-        // DIBUJA ONDA SI ESTÁS RECIBIENDO O SI ESTÁS TRANSMITIENDO (BOTÓN ACTIVE)
         if (isReceiving || (document.getElementById('talk-btn') && document.getElementById('talk-btn').classList.contains('active'))) {
             analyser.getByteTimeDomainData(dataArray);
             ctx.strokeStyle = isReceiving ? '#ff3131' : '#00ff41';
@@ -213,12 +203,6 @@
     function sendMsg() { 
         const i = document.getElementById('msg-in'); 
         if(i.value.trim()){ socket.emit('chat-message', i.value); i.value = ""; } 
-    }
-    
-    function sendSOS() { 
-        navigator.geolocation.getCurrentPosition(pos => { 
-            socket.emit('chat-message', `🚨 SOS: https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}`); 
-        }); 
     }
 </script>
 </body>
