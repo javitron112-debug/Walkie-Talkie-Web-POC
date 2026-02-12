@@ -3,14 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PHANTOM V20.3 | Real-Time</title>
+    <title>PHANTOM V20.4</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         :root { --neon: #00ff41; --sos: #ff3131; --ptt: #ff8c00; --bg: #07070c; }
         body { margin: 0; background: var(--bg); color: white; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; }
         .box { width: 90%; max-width: 400px; padding: 25px; background: #111; border-radius: 30px; border: 1px solid #333; text-align: center; }
-        #talk-btn { width: 100%; padding: 40px; border-radius: 20px; border: none; background: var(--ptt); font-weight: bold; font-size: 20px; cursor: pointer; touch-action: none; }
-        #talk-btn:active { background: var(--sos); }
+        #talk-btn { width: 100%; padding: 40px; border-radius: 20px; border: none; background: var(--ptt); font-weight: bold; font-size: 20px; touch-action: none; }
         #talk-btn:disabled { background: #222; color: #444; }
         #viz { width: 100%; height: 60px; background: #000; border-radius: 10px; margin: 15px 0; border: 1px solid #444; }
         input { background: #000; border: 1px solid #333; color: white; padding: 12px; border-radius: 10px; width: 80%; margin-bottom: 10px; }
@@ -20,27 +19,23 @@
 
 <div id="auth" style="position:fixed; inset:0; background:#000; display:flex; justify-content:center; align-items:center; z-index:100;">
     <div class="box">
-        <h2 style="color:var(--neon)">PHANTOM V20.3</h2>
+        <h2 style="color:var(--neon)">PHANTOM V20.4</h2>
         <input type="text" id="nick" placeholder="NICKNAME" autocomplete="username">
-        <input type="text" id="room" placeholder="CANAL" autocomplete="organization">
+        <input type="text" id="room" placeholder="CANAL">
         <button onclick="start()" style="width:100%; padding:15px; background:var(--neon); border:none; border-radius:10px; font-weight:bold;">CONECTAR</button>
     </div>
 </div>
 
 <div class="box">
-    <header style="display:flex; justify-content:space-between; font-size:10px; color:#666;">
-        <span id="led">● STANDBY</span>
-        <span id="ping">LAT: -- ms</span>
-    </header>
+    <div id="led" style="font-size:12px; color:#666; margin-bottom:10px;">STANDBY</div>
     <canvas id="viz"></canvas>
     <button id="talk-btn">PULSAR PARA HABLAR</button>
 </div>
 
 <script>
-    // CAMBIA ESTO POR TU URL
-    const socket = io("https://parts-virtue-strengthen-giving.trycloudflare.com", { transports: ['websocket'] });
+    const socket = io("https://words-makers-autumn-php.trycloudflare.com", { transports: ['websocket'] });
     let audioCtx, analyser, dataArray, stream, recorder, myNick, btn;
-    let isReceiving = false, pingStart;
+    let isReceiving = false;
 
     async function start() {
         btn = document.getElementById('talk-btn');
@@ -54,12 +49,22 @@
         
         document.getElementById('auth').style.display = 'none';
         
-        // Mantener viva la conexión
-        setInterval(() => { pingStart = Date.now(); socket.emit('ping-check'); }, 3000);
+        // Desbloqueo de audio para iOS
+        const buffer = audioCtx.createBuffer(1, 1, 22050);
+        const source = audioCtx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioCtx.destination);
+        source.start(0);
+
         draw();
     }
 
-    socket.on('pong-check', () => { document.getElementById('ping').innerText = `LAT: ${Date.now() - pingStart} ms`; });
+    // --- DETECCIÓN DE FORMATO COMPATIBLE ---
+    function getSupportedMime() {
+        const types = ['audio/webm; codecs=opus', 'audio/ogg; codecs=opus', 'audio/mp4', 'audio/wav'];
+        for (let t of types) { if (MediaRecorder.isTypeSupported(t)) return t; }
+        return '';
+    }
 
     const startPTT = (e) => {
         if (e.cancelable) e.preventDefault();
@@ -67,16 +72,18 @@
         audioCtx.resume();
         socket.emit('request-mic');
         
-        recorder = new MediaRecorder(stream);
+        const mime = getSupportedMime();
+        recorder = new MediaRecorder(stream, { mimeType: mime });
+        
         recorder.ondataavailable = async (ev) => {
             if (ev.data.size > 0) {
                 const buffer = await ev.data.arrayBuffer();
-                socket.emit('audio-chunk', buffer);
+                socket.emit('audio-chunk', { buffer, mime }); // Enviamos el mime para que el receptor sepa qué es
             }
         };
-        // ENVIAR FRAGMENTOS CADA 200ms (Esto garantiza que haya datos constantes)
-        recorder.start(200);
-        btn.innerText = "TRANSMITIENDO...";
+        recorder.start(200); // Fragmentos de 200ms
+        btn.innerText = "TX...";
+        btn.style.background = "var(--sos)";
     };
 
     const stopPTT = () => {
@@ -84,6 +91,7 @@
             recorder.stop();
             socket.emit('release-mic');
             btn.innerText = "PULSAR PARA HABLAR";
+            btn.style.background = "var(--ptt)";
         }
     };
 
@@ -92,26 +100,31 @@
     talkBtn.addEventListener('touchend', stopPTT, { passive: false });
     talkBtn.onmousedown = startPTT; talkBtn.onmouseup = stopPTT;
 
-    socket.on('audio-stream', async (buffer) => {
+    socket.on('audio-stream', async (data) => {
         isReceiving = true;
-        document.getElementById('led').innerText = "● RECIBIENDO";
+        document.getElementById('led').innerText = "RECIBIENDO";
         document.getElementById('led').style.color = "var(--sos)";
 
-        const blob = new Blob([buffer], { type: 'audio/webm; codecs=opus' });
-        const audio = new Audio(URL.createObjectURL(blob));
-        
-        // Usar el contexto para visualizar la recepción
-        const source = audioCtx.createMediaElementSource(audio);
-        source.connect(analyser);
-        analyser.connect(audioCtx.destination);
-        
-        audio.play();
-        audio.onended = () => {
-            source.disconnect();
-            isReceiving = false;
-            document.getElementById('led').innerText = "● STANDBY";
-            document.getElementById('led').style.color = "#666";
-        };
+        try {
+            // Creamos el blob con el MIME que nos envía el emisor
+            const blob = new Blob([data.buffer], { type: data.mime });
+            const audio = new Audio(URL.createObjectURL(blob));
+            
+            const source = audioCtx.createMediaElementSource(audio);
+            source.connect(analyser);
+            analyser.connect(audioCtx.destination);
+            
+            audio.play().catch(e => console.log("Error de reproducción:", e));
+            
+            audio.onended = () => {
+                source.disconnect();
+                isReceiving = false;
+                document.getElementById('led').innerText = "STANDBY";
+                document.getElementById('led').style.color = "#666";
+            };
+        } catch (e) {
+            console.error("Fallo en el códec de audio:", e);
+        }
     });
 
     socket.on('channel-busy', (u) => {
@@ -131,12 +144,10 @@
         const canvas = document.getElementById('viz');
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0,0,canvas.width,canvas.height);
-        
         analyser.getByteFrequencyData(dataArray);
         ctx.fillStyle = isReceiving ? 'red' : 'green';
         for (let i = 0; i < dataArray.length; i++) {
-            const barHeight = dataArray[i] / 2;
-            ctx.fillRect(i * 3, canvas.height - barHeight, 2, barHeight);
+            ctx.fillRect(i * 3, canvas.height - dataArray[i] / 2, 2, dataArray[i] / 2);
         }
     }
 </script>
