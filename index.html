@@ -3,87 +3,86 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PHANTOM V20.4</title>
+    <title>PHANTOM V20.5 | Stream Fix</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         :root { --neon: #00ff41; --sos: #ff3131; --ptt: #ff8c00; --bg: #07070c; }
-        body { margin: 0; background: var(--bg); color: white; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; }
-        .box { width: 90%; max-width: 400px; padding: 25px; background: #111; border-radius: 30px; border: 1px solid #333; text-align: center; }
+        body { margin: 0; background: var(--bg); color: white; font-family: monospace; display: flex; justify-content: center; height: 100vh; }
+        .box { width: 90%; max-width: 400px; padding: 25px; text-align: center; }
         #talk-btn { width: 100%; padding: 40px; border-radius: 20px; border: none; background: var(--ptt); font-weight: bold; font-size: 20px; touch-action: none; }
+        #talk-btn:active { background: var(--sos); }
         #talk-btn:disabled { background: #222; color: #444; }
-        #viz { width: 100%; height: 60px; background: #000; border-radius: 10px; margin: 15px 0; border: 1px solid #444; }
-        input { background: #000; border: 1px solid #333; color: white; padding: 12px; border-radius: 10px; width: 80%; margin-bottom: 10px; }
+        input { background: #111; border: 1px solid #333; color: white; padding: 12px; border-radius: 10px; width: 80%; margin-bottom: 10px; }
     </style>
 </head>
 <body>
 
 <div id="auth" style="position:fixed; inset:0; background:#000; display:flex; justify-content:center; align-items:center; z-index:100;">
-    <div class="box">
-        <h2 style="color:var(--neon)">PHANTOM V20.4</h2>
-        <input type="text" id="nick" placeholder="NICKNAME" autocomplete="username">
-        <input type="text" id="room" placeholder="CANAL">
+    <div class="box" style="border: 1px solid var(--neon); border-radius: 20px;">
+        <h2 style="color:var(--neon)">PHANTOM V20.5</h2>
+        <input type="text" id="nick" placeholder="NICKNAME" value="OP_1">
+        <input type="text" id="room" placeholder="CANAL" value="RADIO_1">
         <button onclick="start()" style="width:100%; padding:15px; background:var(--neon); border:none; border-radius:10px; font-weight:bold;">CONECTAR</button>
     </div>
 </div>
 
 <div class="box">
-    <div id="led" style="font-size:12px; color:#666; margin-bottom:10px;">STANDBY</div>
-    <canvas id="viz"></canvas>
+    <div id="led" style="font-size:12px; color:#666; margin-bottom:10px;">● STANDBY</div>
+    <div id="info" style="font-size:10px; color:#444; margin-bottom:10px;">BUFFER: 0ms</div>
     <button id="talk-btn">PULSAR PARA HABLAR</button>
 </div>
 
 <script>
-    const socket = io("https://words-makers-autumn-php.trycloudflare.com", { transports: ['websocket'] });
-    let audioCtx, analyser, dataArray, stream, recorder, myNick, btn;
-    let isReceiving = false;
+    // CAMBIA ESTA URL POR LA TUYA
+    const socket = io("https://reported-timeline-moderator-tax.trycloudflare.com", { transports: ['websocket'] });
+    let audioCtx, stream, recorder, myNick, btn, mediaSource, sourceBuffer;
+    let queue = [];
 
     async function start() {
         btn = document.getElementById('talk-btn');
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        analyser = audioCtx.createAnalyser();
-        dataArray = new Uint8Array(analyser.frequencyBinCount);
-
+        
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         myNick = document.getElementById('nick').value;
         socket.emit('join-room', { nickname: myNick, roomName: document.getElementById('room').value });
         
         document.getElementById('auth').style.display = 'none';
-        
-        // Desbloqueo de audio para iOS
-        const buffer = audioCtx.createBuffer(1, 1, 22050);
-        const source = audioCtx.createBufferSource();
-        source.buffer = buffer;
-        source.connect(audioCtx.destination);
-        source.start(0);
-
-        draw();
+        setupMediaSource();
     }
 
-    // --- DETECCIÓN DE FORMATO COMPATIBLE ---
-    function getSupportedMime() {
-        const types = ['audio/webm; codecs=opus', 'audio/ogg; codecs=opus', 'audio/mp4', 'audio/wav'];
-        for (let t of types) { if (MediaRecorder.isTypeSupported(t)) return t; }
-        return '';
+    function setupMediaSource() {
+        mediaSource = new MediaSource();
+        const audio = new Audio();
+        audio.src = URL.createObjectURL(mediaSource);
+        audio.play();
+
+        mediaSource.addEventListener('sourceopen', () => {
+            // Usamos un codec estándar compatible con la mayoría de navegadores
+            sourceBuffer = mediaSource.addSourceBuffer('audio/webm; codecs="opus"');
+            sourceBuffer.addEventListener('updateend', () => {
+                if (queue.length > 0 && !sourceBuffer.updating) {
+                    sourceBuffer.appendBuffer(queue.shift());
+                }
+            });
+        });
     }
 
     const startPTT = (e) => {
         if (e.cancelable) e.preventDefault();
         if (btn.disabled) return;
         audioCtx.resume();
-        socket.emit('request-mic');
+        socket.emit('request-mic', myNick);
         
-        const mime = getSupportedMime();
-        recorder = new MediaRecorder(stream, { mimeType: mime });
-        
+        // Grabamos en fragmentos pequeños pero constantes
+        recorder = new MediaRecorder(stream, { mimeType: 'audio/webm; codecs=opus' });
         recorder.ondataavailable = async (ev) => {
             if (ev.data.size > 0) {
                 const buffer = await ev.data.arrayBuffer();
-                socket.emit('audio-chunk', { buffer, mime }); // Enviamos el mime para que el receptor sepa qué es
+                socket.emit('audio-chunk', buffer);
             }
         };
-        recorder.start(200); // Fragmentos de 200ms
-        btn.innerText = "TX...";
-        btn.style.background = "var(--sos)";
+        recorder.start(100); 
+        btn.innerText = "TRANSMITIENDO...";
     };
 
     const stopPTT = () => {
@@ -91,7 +90,6 @@
             recorder.stop();
             socket.emit('release-mic');
             btn.innerText = "PULSAR PARA HABLAR";
-            btn.style.background = "var(--ptt)";
         }
     };
 
@@ -100,31 +98,17 @@
     talkBtn.addEventListener('touchend', stopPTT, { passive: false });
     talkBtn.onmousedown = startPTT; talkBtn.onmouseup = stopPTT;
 
-    socket.on('audio-stream', async (data) => {
-        isReceiving = true;
-        document.getElementById('led').innerText = "RECIBIENDO";
+    socket.on('audio-stream', (buffer) => {
+        document.getElementById('led').innerText = "● RECIBIENDO";
         document.getElementById('led').style.color = "var(--sos)";
-
-        try {
-            // Creamos el blob con el MIME que nos envía el emisor
-            const blob = new Blob([data.buffer], { type: data.mime });
-            const audio = new Audio(URL.createObjectURL(blob));
-            
-            const source = audioCtx.createMediaElementSource(audio);
-            source.connect(analyser);
-            analyser.connect(audioCtx.destination);
-            
-            audio.play().catch(e => console.log("Error de reproducción:", e));
-            
-            audio.onended = () => {
-                source.disconnect();
-                isReceiving = false;
-                document.getElementById('led').innerText = "STANDBY";
-                document.getElementById('led').style.color = "#666";
-            };
-        } catch (e) {
-            console.error("Fallo en el códec de audio:", e);
+        
+        if (sourceBuffer && !sourceBuffer.updating) {
+            sourceBuffer.appendBuffer(buffer);
+        } else {
+            queue.push(buffer);
         }
+        
+        document.getElementById('info').innerText = "BUFFER: " + queue.length + " chunks";
     });
 
     socket.on('channel-busy', (u) => {
@@ -137,19 +121,9 @@
     socket.on('channel-free', () => {
         btn.disabled = false;
         btn.innerText = "PULSAR PARA HABLAR";
+        document.getElementById('led').innerText = "● STANDBY";
+        document.getElementById('led').style.color = "#666";
     });
-
-    function draw() {
-        requestAnimationFrame(draw);
-        const canvas = document.getElementById('viz');
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0,0,canvas.width,canvas.height);
-        analyser.getByteFrequencyData(dataArray);
-        ctx.fillStyle = isReceiving ? 'red' : 'green';
-        for (let i = 0; i < dataArray.length; i++) {
-            ctx.fillRect(i * 3, canvas.height - dataArray[i] / 2, 2, dataArray[i] / 2);
-        }
-    }
 </script>
 </body>
 </html>
