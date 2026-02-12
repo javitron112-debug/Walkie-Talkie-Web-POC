@@ -1,39 +1,53 @@
-================================================================
-          SECURE COMMS V14.5 - TACTICAL COMMANDER
-================================================================
+==========================================================
+        PHANTOM RADIO - SISTEMA TÁCTICO V21.7
+==========================================================
 
-DESCRIPCIÓN TÉCNICA:
---------------------
-Sistema de radiocomunicación digital táctico con cifrado de 
-extremo a extremo (E2EE) AES-GCM de 256 bits. Diseñado para 
-comunicaciones seguras, privadas y de baja latencia.
+DESCRIPCIÓN:
+Sistema de radiocomunicación sobre protocolo WebSocket con 
+encriptación AES-GCM punto a punto y sistema de gestión de
+canales (PTT con bloqueo de colisión).
 
-CARACTERÍSTICAS DE LA VERSIÓN 14.5:
------------------------------------
-1. SEGURIDAD TOTAL: Cifrado en el cliente. El servidor nunca 
-   ve el audio real, solo datos cifrados.
-2. SISTEMA SOS PRO: Alerta de emergencia con tono sintético 
-   de 800Hz, vibración y aviso visual estroboscópico.
-3. NOISE GATE: Ahorro de datos inteligente. El sistema no 
-   transmite si no detecta voz (umbral ajustable).
-4. ERGONOMÍA MÓVIL: Botón PTT elevado para evitar conflictos 
-   con las barras de navegación de iOS/Android.
-5. LISTA DE OPERADORES: Desplegable dinámico en tiempo real.
+REQUISITOS PREVIOS:
+1. Node.js instalado (versión 16 o superior).
+2. Un túnel (Cloudflare Tunnel o Ngrok) para acceso remoto.
+3. Navegador compatible con Web Audio API (Chrome, Safari, Edge).
 
-GUÍA DE INSTALACIÓN (SERVIDOR):
--------------------------------
-1. Instalar dependencias: npm install express socket.io helmet
-2. Ejecutar: node server.js
-3. Exponer con Cloudflare: cloudflared tunnel --url http://localhost:3000
+ESTRUCTURA DE ARCHIVOS:
+- server.js: Motor del servidor Socket.io y gestión de salas.
+- index.html: Interfaz de usuario y motor de audio encriptado.
+- package.json: Dependencias del proyecto.
 
-GUÍA DE OPERACIÓN (USUARIO):
-----------------------------
-- El envío de mensajes de texto se activa con la tecla 'ENTER'.
-- El botón SOS requiere 2 segundos de presión para activarse.
-- Use el icono de la batería para desactivar las ondas y ahorrar energía.
+INSTRUCCIONES DE INSTALACIÓN:
+1. Abre una terminal en la carpeta del proyecto.
+2. Instala las dependencias:
+   npm install express socket.io http
+3. Ejecuta el servidor:
+   node server.js
 
-AVISO LEGAL:
-------------
-Proyecto educativo de ingeniería. No apto para emergencias reales.
-El desarrollador no se hace responsable del uso de la herramienta.
-================================================================
+CONFIGURACIÓN DE RED:
+Si usas Cloudflare Tunnel (recomendado para móviles):
+1. Inicia el túnel: cloudflared tunnel --url http://localhost:3000
+2. COPIA la URL generada (ej. https://xxx-xxx.trycloudflare.com).
+3. Abre 'index.html' y localiza la línea:
+   const socket = io("TU_URL_AQUÍ", ...);
+4. PEGA tu URL y guarda el archivo.
+
+GUÍA DE USO:
+1. Accede a la URL desde tu móvil o PC.
+2. Ingresa un NICKNAME, el nombre de CANAL y la CLAVE E2EE.
+3. IMPORTANTE: Todos los usuarios en el mismo canal deben
+   usar la misma CLAVE para poder desencriptar el audio.
+4. BOTÓN PTT: 
+   - Naranja: Canal libre, listo para hablar.
+   - Rojo: Estás transmitiendo (TX).
+   - Gris: Canal ocupado por otro operador (RX).
+
+NOTAS TÉCNICAS:
+- El audio se envía en paquetes sólidos al soltar el botón. 
+  Esto garantiza estabilidad en redes móviles 4G/5G.
+- Si el audio no suena en móviles, asegúrate de que el 
+  volumen multimedia esté activo y no esté en modo silencio.
+
+SOPORTE:
+Versión: Legacy Shield V21.7 (Estabilidad Reforzada)
+==========================================================
