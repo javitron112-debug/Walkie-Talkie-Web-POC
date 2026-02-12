@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Esquema de Funcionamiento - Phantom Radio</title>
+    <style>
+        :root {
+            --primary: #00ff41;
+            --secondary: #ff8c00;
+            --bg: #0a0a0a;
+            --card: #161616;
+            --text: #e0e0e0;
+        }
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: auto;
+        }
+        h1, h2 {
+            color: var(--primary);
+            text-align: center;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 30px;
+        }
+        .card {
+            background: var(--card);
+            padding: 20px;
+            border-radius: 15px;
+            border-left: 4px solid var(--primary);
+        }
+        .full-width {
+            grid-column: 1 / -1;
+        }
+        ul {
+            padding-left: 20px;
+        }
+        li {
+            margin-bottom: 10px;
+        }
+        .flow-step {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .step-num {
+            background: var(--primary);
+            color: black;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            margin-right: 15px;
+            flex-shrink: 0;
+        }
+        .highlight {
+            color: var(--secondary);
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Estructura Técnica Phantom Radio V21.7</h1>
+
+    <div class="grid">
+        <div class="card">
+            <h2>1. Arquitectura de Red</h2>
+            <ul>
+                <li><strong>Cliente (Frontend):</strong> Aplicación basada en Web Audio API y MediaRecorder.</li>
+                <li><strong>Servidor (Backend):</strong> Node.js con Socket.io para comunicación en tiempo real.</li>
+                <li><strong>Túnel Seguro:</strong> Implementación de túneles para evitar exposición de IP local y bypass de NAT.</li>
+                <li><strong>Protocolo:</strong> WebSockets (WSS) para baja latencia.</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <h2>2. Seguridad y Privacidad</h2>
+            <ul>
+                <li><strong>Encriptación:</strong> AES-GCM de 256 bits (Cifrado de extremo a extremo).</li>
+                <li><strong>Derivación de Claves:</strong> Uso de PBKDF2 con 100,000 iteraciones para proteger contraseñas.</li>
+                <li><strong>Aislamiento:</strong> Las salas (canales) están separadas lógicamente; el audio no cruza entre ellas.</li>
+            </ul>
+        </div>
+
+        <div class="card full-width">
+            <h2>3. Flujo de Transmisión de Audio (PTT)</h2>
+            <div class="flow-step">
+                <div class="step-num">1</div>
+                <div><strong>Captura:</strong> El usuario mantiene pulsado el botón PTT. MediaRecorder inicia la captura de audio en el navegador.</div>
+            </div>
+            <div class="flow-step">
+                <div class="step-num">2</div>
+                <div><strong>Procesamiento:</strong> Al soltar, se genera un Blob de audio que se convierte en un <em>ArrayBuffer</em>.</div>
+            </div>
+            <div class="flow-step">
+                <div class="step-num">3</div>
+                <div><strong>Cifrado Local:</strong> El buffer se encripta con la clave de canal <span class="highlight">antes de salir del dispositivo</span>.</div>
+            </div>
+            <div class="flow-step">
+                <div class="step-num">4</div>
+                <div><strong>Tránsito:</strong> El servidor recibe el paquete cifrado y lo retransmite a los demás operadores del canal.</div>
+            </div>
+            <div class="flow-step">
+                <div class="step-num">5</div>
+                <div><strong>Recepción:</strong> Los clientes reciben el paquete, lo desencriptan con su clave local y lo reproducen mediante <em>Audio Context</em>.</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>4. Funcionalidades Clave</h2>
+            <ul>
+                <li><strong>Bloqueo de Colisión:</strong> Indica quién está transmitiendo y deshabilita el PTT de los demás operadores.</li>
+                <li><strong>Chat Táctico:</strong> Mensajería de texto paralela a la voz para datos rápidos.</li>
+                <li><strong>Estado de Operadores:</strong> Conteo en tiempo real de usuarios activos en el canal.</li>
+                <li><strong>Visualizador:</strong> Monitor de señal visual para confirmar entrada/salida de audio.</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <h2>5. Optimización de Hardware</h2>
+            <ul>
+                <li><strong>Modo Ahorro:</strong> El micrófono solo se activa durante la pulsación activa del botón.</li>
+                <li><strong>Limpieza de Memoria:</strong> Revocación automática de URLs de objetos de audio tras la reproducción.</li>
+                <li><strong>Compatibilidad:</strong> Soporte multicanal para WebM/Opus.</li>
+            </ul>
+        </div>
+    </div>
+
+    <p style="text-align: center; margin-top: 40px; font-size: 12px; color: #555;">
+        Documentación Técnica Phantom - Uso Estrictamente Operativo
+    </p>
+</div>
+
+</body>
+</html>
