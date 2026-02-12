@@ -3,18 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PHANTOM V16.9 | Direct Sound</title>
+    <title>PHANTOM V16.9.1</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         :root { --neon: #00ff41; --sos: #ff3131; --ptt: #ff8c00; --bg: #07070c; }
         body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; display: flex; justify-content: center; height: 100vh; overflow: hidden; }
-        .glass-container { width: 95%; max-width: 450px; height: 94vh; background: rgba(255,255,255,0.05); border-radius: 35px; display: flex; flex-direction: column; padding: 20px; box-sizing: border-box; margin-top: 10px; border: 1px solid #333; position: relative; }
+        .glass-container { width: 95%; max-width: 450px; height: 95vh; background: rgba(255,255,255,0.05); border-radius: 35px; display: flex; flex-direction: column; padding: 20px; box-sizing: border-box; margin-top: 10px; border: 1px solid #333; position: relative; }
         header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #222; padding-bottom: 10px; margin-bottom: 10px; }
-        #status-led { width: 10px; height: 10px; background: var(--neon); border-radius: 50%; box-shadow: 0 0 8px var(--neon); }
-        .busy-led { background: var(--sos) !important; box-shadow: 0 0 12px var(--sos); }
-        #chat { flex: 1; overflow-y: auto; margin-bottom: 10px; font-size: 13px; scroll-behavior: smooth; }
-        .msg { background: #111; padding: 10px; border-radius: 10px; margin-bottom: 8px; border-left: 3px solid var(--neon); }
-        .viz-box { height: 70px; background: #000; border-radius: 15px; margin-bottom: 10px; border: 1px solid #444; position: relative; overflow: hidden; }
+        #status-led { width: 10px; height: 10px; background: var(--neon); border-radius: 50%; }
+        .busy-led { background: var(--sos) !important; box-shadow: 0 0 10px var(--sos); }
+        .viz-box { height: 60px; background: #000; border-radius: 15px; margin-bottom: 10px; border: 1px solid #444; position: relative; overflow: hidden; }
         #talk-btn { width: 100%; padding: 25px; border-radius: 25px; border: none; background: var(--ptt); color: black; font-weight: bold; font-size: 18px; touch-action: none; cursor: pointer; }
         #talk-btn.active { background: var(--sos); color: white; }
         #auth-overlay { position: fixed; inset: 0; background: #000; display: flex; justify-content: center; align-items: center; z-index: 1000; }
@@ -26,11 +24,11 @@
 
 <div id="auth-overlay">
     <form class="card" onsubmit="event.preventDefault(); startApp();">
-        <h2 style="color: var(--neon);">PHANTOM V16.9</h2>
+        <h2 style="color: var(--neon);">PHANTOM V16.9.1</h2>
         <input type="text" id="nick-in" placeholder="ID OPERADOR" required autocomplete="username">
-        <input type="text" id="room-in" placeholder="CANAL" required>
+        <input type="text" id="room-in" placeholder="CANAL" required autocomplete="current-password">
         <input type="password" id="pass-in" placeholder="CLAVE E2EE" required autocomplete="current-password">
-        <button type="submit" style="width:100%; padding:15px; background:var(--neon); border:none; border-radius:12px; font-weight:bold; color:black; cursor:pointer;">CONECTAR</button>
+        <button type="submit" style="width:100%; padding:15px; background:var(--neon); border:none; border-radius:12px; font-weight:bold; color:black;">CONECTAR</button>
     </form>
 </div>
 
@@ -40,15 +38,14 @@
             <div id="status-led"></div>
             <span id="user-count" style="font-size: 10px; color: #888;">OPERADORES: 0</span>
         </div>
-        <button onclick="sendSOS()" style="background:#400; color:var(--sos); border:1px solid var(--sos); padding:8px 15px; border-radius:10px; font-weight:bold; font-size:12px;">⚠️ SOS</button>
     </header>
-    <div id="chat"></div>
+    <div style="flex:1"></div>
     <div class="viz-box"><div id="mode-id" style="position: absolute; top: 5px; right: 10px; font-size: 8px; font-weight: bold; color: #444;">IDLE</div><canvas id="visualizer"></canvas></div>
     <div style="padding-bottom:20px;"><button id="talk-btn">PULSAR PARA HABLAR</button></div>
 </div>
 
 <script>
-    const SERVER = "https://meetings-separated-deposit-penguin.trycloudflare.com"; 
+    const SERVER = "https://slots-tanks-seemed-closer.trycloudflare.com"; 
     const socket = io(SERVER, { transports: ['websocket'], upgrade: false });
 
     let audioCtx, analyser, dataArray, cryptoKey, mediaRecorder, micSource, mainGain;
@@ -57,15 +54,13 @@
     async function deriveKey(p) {
         const enc = new TextEncoder();
         const bk = await crypto.subtle.importKey("raw", enc.encode(p), "PBKDF2", false, ["deriveKey"]);
-        return crypto.subtle.deriveKey({ name: "PBKDF2", salt: enc.encode("radio-16.7"), iterations: 100000, hash: "SHA-256" }, bk, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+        return crypto.subtle.deriveKey({ name: "PBKDF2", salt: enc.encode("radio-v1"), iterations: 100000, hash: "SHA-256" }, bk, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
     }
 
     async function startApp() {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        mainGain = audioCtx.createGain();
-        mainGain.connect(audioCtx.destination);
-        analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 256;
+        mainGain = audioCtx.createGain(); mainGain.connect(audioCtx.destination);
+        analyser = audioCtx.createAnalyser(); analyser.fftSize = 256;
         dataArray = new Uint8Array(analyser.frequencyBinCount);
         
         myNick = document.getElementById('nick-in').value;
@@ -80,11 +75,11 @@
             micSource = audioCtx.createMediaStreamSource(stream);
             const btn = document.getElementById('talk-btn');
 
-            btn.onmousedown = btn.ontouchstart = (e) => {
+            const startPTT = (e) => {
                 if(e.cancelable) e.preventDefault();
                 if(isMicLocked) return;
                 audioCtx.resume();
-                mainGain.gain.setValueAtTime(0, audioCtx.currentTime); // Mute local
+                mainGain.gain.setValueAtTime(0, audioCtx.currentTime);
                 micSource.connect(analyser);
                 btn.classList.add('active');
                 socket.emit('request-mic');
@@ -101,7 +96,7 @@
                 mediaRecorder.start();
             };
 
-            btn.onmouseup = btn.ontouchend = () => {
+            const stopPTT = () => {
                 if(mediaRecorder && mediaRecorder.state !== 'inactive') {
                     mediaRecorder.stop();
                     socket.emit('release-mic');
@@ -110,6 +105,12 @@
                     mainGain.gain.setValueAtTime(1, audioCtx.currentTime);
                 }
             };
+
+            // Corregido: Passive false para evitar advertencia y mejorar respuesta
+            btn.addEventListener('touchstart', startPTT, { passive: false });
+            btn.addEventListener('touchend', stopPTT, { passive: false });
+            btn.onmousedown = startPTT; 
+            btn.onmouseup = stopPTT;
         });
     }
 
@@ -117,41 +118,39 @@
         try {
             if (audioCtx.state === 'suspended') await audioCtx.resume();
             
-            // DESCIFRADO
             const dec = await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(d.iv) }, cryptoKey, new Uint8Array(d.ciphertext));
             
-            // REPRODUCCIÓN DIRECTA (Sin el error de Source Not Found)
+            // Decodificación directa al búfer de la tarjeta de sonido
             audioCtx.decodeAudioData(dec, (buffer) => {
                 isReceiving = true;
                 document.getElementById('mode-id').innerText = "RX";
-                
                 const source = audioCtx.createBufferSource();
                 source.buffer = buffer;
                 source.connect(analyser);
-                analyser.connect(mainGain);
+                source.connect(mainGain);
                 source.start(0);
-                
                 source.onended = () => {
                     isReceiving = false;
                     document.getElementById('mode-id').innerText = "IDLE";
                 };
-            }, (err) => console.error("Error decodificando audio binario:", err));
-
-        } catch(e) { console.error("Error descifrado:", e); }
+            });
+        } catch(e) { isReceiving = false; }
     });
 
     socket.on('channel-busy', u => {
         isMicLocked = true;
         document.getElementById('status-led').classList.add('busy-led');
-        const btn = document.getElementById('talk-btn');
-        if (u !== myNick) { btn.disabled = true; btn.innerText = `OCUPADO: ${u}`; }
+        if (u !== myNick) {
+            document.getElementById('talk-btn').disabled = true;
+            document.getElementById('talk-btn').innerText = `OCUPADO: ${u}`;
+        }
     });
 
     socket.on('channel-free', () => {
-        isMicLocked = false; isReceiving = false;
+        isMicLocked = false;
         document.getElementById('status-led').classList.remove('busy-led');
-        const btn = document.getElementById('talk-btn');
-        btn.disabled = false; btn.innerText = "PULSAR PARA HABLAR";
+        document.getElementById('talk-btn').disabled = false;
+        document.getElementById('talk-btn').innerText = "PULSAR PARA HABLAR";
     });
 
     socket.on('user-list', list => { document.getElementById('user-count').innerText = `OPERADORES: ${list.length}`; });
