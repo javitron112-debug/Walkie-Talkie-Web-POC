@@ -2,59 +2,73 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PHANTOM V22.2 | PRO POC</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>PHANTOM V22.2 | PRO</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         :root { --neon: #00ff41; --sos: #ff3131; --ptt: #ff8c00; --rx: #0088ff; --bg: #050508; }
-        body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; display: flex; justify-content: center; height: 100vh; height: -webkit-fill-available; overflow: hidden; }
         
-        .glass-container { width: 100%; max-width: 450px; height: 100vh; display: flex; flex-direction: column; padding: 15px; box-sizing: border-box; background: rgba(10,10,15,1); }
-        
-        header { display: flex; justify-content: space-between; align-items: center; padding: 10px 5px; border-bottom: 1px solid #222; font-size: 12px; }
-        #status-led { width: 12px; height: 12px; border-radius: 50%; background: #333; transition: 0.3s; }
-        .led-tx { background: var(--sos) !important; box-shadow: 0 0 10px var(--sos); }
-        .led-rx { background: var(--rx) !important; box-shadow: 0 0 10px var(--rx); }
+        body { 
+            margin: 0; background: var(--bg); color: white; font-family: sans-serif; 
+            height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+        }
 
-        .ptt-section { padding: 10px 0; flex-shrink: 0; }
+        .app-shell {
+            flex: 1; display: flex; flex-direction: column; padding: 15px;
+            padding-bottom: 90px; /* Espacio para que el chat no quede tras la barra */
+            box-sizing: border-box;
+        }
+
+        header { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #222; font-size: 11px; }
+        #status-led { width: 10px; height: 10px; border-radius: 50%; background: #333; box-shadow: 0 0 5px #000; }
+        .led-tx { background: var(--sos) !important; box-shadow: 0 0 10px var(--sos) !important; }
+        .led-rx { background: var(--rx) !important; box-shadow: 0 0 10px var(--rx) !important; }
+
+        .ptt-section { padding: 10px 0; }
         #talk-btn { 
-            width: 100%; padding: 50px 0; border-radius: 25px; border: 3px solid #333; 
-            background: #111; color: #444; font-weight: 900; font-size: 22px; 
+            width: 100%; padding: 45px 0; border-radius: 20px; border: 3px solid #333; 
+            background: #111; color: #444; font-weight: 900; font-size: 20px; 
             touch-action: none; cursor: pointer; transition: 0.1s;
         }
         #talk-btn.ready { background: var(--ptt); color: black; border-color: #ff8c00; }
-        #talk-btn.active { background: var(--sos); color: white; transform: scale(0.97); }
+        #talk-btn.active { background: var(--sos); color: white; transform: scale(0.96); }
 
-        .viz-box { height: 60px; background: #000; border-radius: 15px; border: 1px solid #222; margin: 10px 0; overflow: hidden; }
+        .viz-box { height: 50px; background: #000; border-radius: 15px; border: 1px solid #222; margin-bottom: 10px; overflow: hidden; }
         
-        #chat { flex: 1; overflow-y: auto; margin-bottom: 10px; padding: 5px; border-bottom: 1px solid #111; }
-        .msg { background: rgba(255,255,255,0.03); padding: 8px; border-radius: 10px; margin-bottom: 6px; font-size: 13px; border-left: 2px solid var(--neon); }
-        .msg small { color: #555; float: right; }
+        #chat { flex: 1; overflow-y: auto; padding-right: 5px; }
+        .msg { background: rgba(255,255,255,0.03); padding: 8px; border-radius: 10px; margin-bottom: 8px; font-size: 13px; border-left: 2px solid var(--neon); }
 
-        /* AREA DE INPUT POSICIONADA PARA MÓVILES */
-        .input-area { display: flex; gap: 8px; padding: 10px 0; background: var(--bg); margin-bottom: 5px; }
+        /* BARRA DE ESCRITURA FIJA */
+        .input-area { 
+            position: fixed; bottom: 0; left: 0; width: 100%;
+            display: flex; gap: 8px; padding: 15px 15px calc(15px + env(safe-area-inset-bottom)); 
+            background: #0a0a0a; border-top: 1px solid #222;
+            box-sizing: border-box; z-index: 100;
+        }
         #msg-in { 
-            background: #000; border: 1px solid #333; color: white; padding: 12px; 
-            border-radius: 12px; outline: none; flex: 1; font-size: 16px; /* 16px evita zoom en iOS */
+            background: #1a1a1a; border: 1px solid #444; color: white; 
+            padding: 12px; border-radius: 10px; outline: none; flex: 1; font-size: 16px; 
         }
 
         #auth-overlay { position: fixed; inset: 0; background: #000; display: flex; justify-content: center; align-items: center; z-index: 1000; }
-        .card { background: #0a0a0a; padding: 25px; border-radius: 25px; border: 1px solid var(--neon); width: 80%; }
+        .card { background: #0a0a0a; padding: 25px; border-radius: 25px; border: 1px solid var(--neon); width: 85%; max-width: 350px; }
+        .card input { width: 100%; padding: 12px; margin-bottom: 10px; border-radius: 10px; background: #000; border: 1px solid #333; color: white; box-sizing: border-box; font-size: 16px; }
     </style>
 </head>
 <body>
 
 <div id="auth-overlay">
     <form class="card" onsubmit="event.preventDefault(); startApp();">
-        <h2 style="color: var(--neon); font-size: 18px; text-align: center;">SYSTEM AUTH</h2>
-        <input type="text" id="nick-in" placeholder="USUARIO" required style="width:100%; box-sizing:border-box;">
-        <input type="text" id="room-in" placeholder="CANAL" required style="width:100%; box-sizing:border-box;">
-        <input type="password" id="pass-in" placeholder="CLAVE" required style="width:100%; box-sizing:border-box;">
-        <button type="submit" style="width:100%; padding:15px; background:var(--neon); border:none; border-radius:12px; font-weight:bold; margin-top:10px;">CONECTAR</button>
+        <h2 style="color: var(--neon); text-align: center; margin-top: 0; font-size: 1.2rem;">SISTEMA PHANTOM</h2>
+        <input type="text" id="nick-in" placeholder="ID OPERADOR" required>
+        <input type="text" id="room-in" placeholder="CANAL / FREC" required>
+        <input type="password" id="pass-in" placeholder="PASS E2EE" required>
+        <button type="submit" style="width:100%; padding:15px; background:var(--neon); border:none; border-radius:12px; font-weight:bold; cursor:pointer;">ESTABLECER VÍNCULO</button>
+        <p id="conn-status" style="font-size: 10px; color: #555; text-align: center; margin-top: 10px;">ESPERANDO SERVIDOR...</p>
     </form>
 </div>
 
-<div class="glass-container">
+<div class="app-shell">
     <header>
         <div id="status-led"></div>
         <span id="latency-val">LAT: --ms</span>
@@ -62,27 +76,32 @@
     </header>
 
     <div class="ptt-section">
-        <button id="talk-btn" disabled>ESPERANDO...</button>
+        <button id="talk-btn" disabled>INICIALIZANDO...</button>
     </div>
 
     <div class="viz-box"><canvas id="visualizer"></canvas></div>
 
     <div id="chat"></div>
+</div>
 
-    <div class="input-area">
-        <input type="text" id="msg-in" placeholder="Escribe aquí..." onkeydown="if(event.key==='Enter') sendMsg()">
-        <button onclick="sendMsg()" style="background:var(--neon); border:none; border-radius:10px; width:50px; font-weight:bold;">></button>
-    </div>
+<div class="input-area">
+    <input type="text" id="msg-in" placeholder="Escribir..." onkeydown="if(event.key==='Enter') sendMsg()">
+    <button onclick="sendMsg()" style="background:var(--neon); border:none; border-radius:10px; width:50px; height:45px; font-weight:bold;">></button>
 </div>
 
 <script>
-    // CAMBIA ESTA URL CADA VEZ QUE INICIES EL TÚNEL
-    const socket = io("https://moves-mobiles-lamb-formatting.trycloudflare.com", { 
-        transports: ['polling', 'websocket'], // Polling primero asegura conexión en redes inestables
-        upgrade: true 
+    // Conexión automática al origen de la página
+    const socket = io({ 
+        transports: ['polling', 'websocket'],
+        upgrade: true,
+        reconnection: true,
+        timeout: 20000
     });
 
     let audioCtx, mainGain, analyser, dataArray, cryptoKey, mediaRecorder, stream, myNick, btn, startLat;
+
+    socket.on('connect', () => { document.getElementById('conn-status').innerText = "CONECTADO: LISTO PARA LOGIN"; });
+    socket.on('connect_error', (e) => { document.getElementById('conn-status').innerText = "ERROR: " + e.message; });
 
     async function deriveKey(p) {
         const enc = new TextEncoder();
@@ -94,11 +113,10 @@
         if(!audioCtx) return;
         const osc = audioCtx.createOscillator();
         const g = audioCtx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(800, audioCtx.currentTime);
-        g.gain.setValueAtTime(0.05, audioCtx.currentTime);
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+        g.gain.setValueAtTime(0.02, audioCtx.currentTime);
         osc.connect(g); g.connect(audioCtx.destination);
-        osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.08);
     }
 
     async function startApp() {
@@ -111,21 +129,17 @@
         myNick = document.getElementById('nick-in').value;
         cryptoKey = await deriveKey(document.getElementById('pass-in').value);
         
-        socket.emit('join-room', { roomName: document.getElementById('room-in').value, password: document.getElementById('pass-in').value, nickname: myNick });
+        socket.emit('join-room', { 
+            roomName: document.getElementById('room-in').value, 
+            password: document.getElementById('pass-in').value, 
+            nickname: myNick 
+        });
         
         socket.on('joined-success', () => { 
             document.getElementById('auth-overlay').style.display = 'none'; 
-            initMic(); 
-            initExtra(); 
+            initMic(); draw();
+            setInterval(() => { startLat = Date.now(); socket.emit('ping-latency'); }, 3000);
         });
-    }
-
-    function initExtra() {
-        setInterval(() => { startLat = Date.now(); socket.emit('ping-latency'); }, 3000);
-        socket.on('pong-latency', () => { 
-            document.getElementById('latency-val').innerText = `LAT: ${Date.now() - startLat}ms`; 
-        });
-        draw();
     }
 
     function initMic() {
@@ -189,12 +203,9 @@
                 document.getElementById('status-led').classList.remove('led-rx');
                 playRogerBeep();
             };
-        } catch(e) { console.error("RX Fail"); }
+        } catch(e) { console.error("RX ERROR"); }
     });
 
-    socket.on('channel-busy', u => { if(u !== myNick) { btn.disabled = true; btn.innerText = "TX: " + u; btn.classList.remove('ready'); } });
-    socket.on('channel-free', () => { btn.disabled = false; btn.innerText = "PULSAR PARA HABLAR"; btn.classList.add('ready'); });
-    
     socket.on('chat-message', d => {
         const div = document.createElement('div'); div.className = 'msg';
         div.innerHTML = `<small>${d.time}</small><b>${d.user}:</b> ${d.text}`;
@@ -202,6 +213,9 @@
         c.scrollTop = c.scrollHeight;
     });
 
+    socket.on('pong-latency', () => { document.getElementById('latency-val').innerText = `LAT: ${Date.now() - startLat}ms`; });
+    socket.on('channel-busy', u => { if(u !== myNick) { btn.disabled = true; btn.innerText = "TX: " + u; btn.classList.remove('ready'); } });
+    socket.on('channel-free', () => { btn.disabled = false; btn.innerText = "PULSAR PARA HABLAR"; btn.classList.add('ready'); });
     socket.on('user-list', list => { document.getElementById('user-count').innerText = `USR: ${list.length}`; });
 
     function sendMsg() { 
