@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>PHANTOM V22.2 | GITHUB EDITION</title>
+    <title>PHANTOM V22 | XHR FIX</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         :root { --neon: #00ff41; --sos: #ff3131; --ptt: #ff8c00; --rx: #0088ff; --bg: #050508; }
@@ -13,14 +13,13 @@
         #status-led { width: 10px; height: 10px; border-radius: 50%; background: #333; }
         .led-tx { background: var(--sos) !important; box-shadow: 0 0 10px var(--sos); }
         .led-rx { background: var(--rx) !important; box-shadow: 0 0 10px var(--rx); }
-        .ptt-section { padding: 10px 0; }
         #talk-btn { width: 100%; padding: 45px 0; border-radius: 20px; border: 3px solid #333; background: #111; color: #444; font-weight: 900; font-size: 20px; touch-action: none; cursor: pointer; }
         #talk-btn.ready { background: var(--ptt); color: black; border-color: #ff8c00; }
         #talk-btn.active { background: var(--sos); color: white; transform: scale(0.96); }
         .viz-box { height: 50px; background: #000; border-radius: 15px; border: 1px solid #222; margin-bottom: 10px; overflow: hidden; }
         #chat { flex: 1; overflow-y: auto; padding-right: 5px; }
         .msg { background: rgba(255,255,255,0.03); padding: 8px; border-radius: 10px; margin-bottom: 8px; font-size: 13px; border-left: 2px solid var(--neon); }
-        .input-area { position: fixed; bottom: 0; left: 0; width: 100%; display: flex; gap: 8px; padding: 15px; background: #0a0a0a; border-top: 1px solid #222; box-sizing: border-box; z-index: 100; }
+        .input-area { position: fixed; bottom: 0; left: 0; width: 100%; display: flex; gap: 8px; padding: 15px; background: #0a0a0a; border-top: 1px solid #222; box-sizing: border-box; }
         #msg-in { background: #1a1a1a; border: 1px solid #444; color: white; padding: 12px; border-radius: 10px; outline: none; flex: 1; font-size: 16px; }
         #auth-overlay { position: fixed; inset: 0; background: #000; display: flex; justify-content: center; align-items: center; z-index: 1000; }
         .card { background: #0a0a0a; padding: 25px; border-radius: 25px; border: 1px solid var(--neon); width: 85%; max-width: 350px; }
@@ -31,13 +30,14 @@
 
 <div id="auth-overlay">
     <form class="card" onsubmit="event.preventDefault(); connectAndStart();">
-        <h2 style="color: var(--neon); text-align: center; margin-top: 0;">PHANTOM GITHUB</h2>
+        <h2 style="color: var(--neon); text-align: center; margin-top: 0;">PHANTOM XHR-FIX</h2>
         <input type="text" id="url-in" placeholder="https://tu-url.trycloudflare.com" required>
         <hr style="border: 0; border-top: 1px solid #222; margin: 15px 0;">
         <input type="text" id="nick-in" placeholder="OPERADOR" required>
         <input type="text" id="room-in" placeholder="CANAL" required>
         <input type="password" id="pass-in" placeholder="CLAVE" required>
-        <button type="submit" style="width:100%; padding:15px; background:var(--neon); border:none; border-radius:12px; font-weight:bold; cursor:pointer;">CONECTAR</button>
+        <button type="submit" id="login-btn" style="width:100%; padding:15px; background:var(--neon); border:none; border-radius:12px; font-weight:bold; cursor:pointer;">ACCEDER</button>
+        <p id="status-msg" style="font-size: 10px; text-align: center; color: #666; margin-top: 10px;">Ingresa la URL del túnel para conectar</p>
     </form>
 </div>
 
@@ -61,17 +61,31 @@
     let socket, audioCtx, mainGain, analyser, dataArray, cryptoKey, mediaRecorder, stream, myNick, btn, startLat;
 
     async function connectAndStart() {
-        const cloudflareUrl = document.getElementById('url-in').value.trim();
-        if(!cloudflareUrl.startsWith('http')) return alert("URL Inválida");
+        const url = document.getElementById('url-in').value.trim();
+        const msg = document.getElementById('status-msg');
+        
+        if(!url.startsWith('https')) return alert("DEBES USAR HTTPS://");
 
-        // CONEXIÓN MANUAL A LA URL PEGADA
-        socket = io(cloudflareUrl, { 
+        msg.innerText = "CONECTANDO...";
+        document.getElementById('login-btn').disabled = true;
+
+        // Configuración de Socket.io optimizada para fallos de red
+        socket = io(url, { 
             transports: ['polling', 'websocket'],
-            upgrade: true
+            reconnectionAttempts: 5,
+            timeout: 10000 
         });
 
-        socket.on('connect', startApp);
-        socket.on('connect_error', (e) => alert("Fallo al conectar con el PC: " + e.message));
+        socket.on('connect', () => {
+            msg.innerText = "CONECTADO. AUTENTICANDO...";
+            startApp();
+        });
+
+        socket.on('connect_error', (err) => {
+            msg.innerText = "ERROR XHR: Revisa que el túnel esté abierto";
+            document.getElementById('login-btn').disabled = false;
+            console.error(err);
+        });
     }
 
     async function deriveKey(p) {
@@ -102,7 +116,6 @@
             setInterval(() => { startLat = Date.now(); socket.emit('ping-latency'); }, 3000);
         });
 
-        // Eventos de socket compartidos
         socket.on('audio-stream', async d => {
             try {
                 document.getElementById('status-led').classList.add('led-rx');
@@ -131,16 +144,11 @@
 
     function initMic() {
         navigator.mediaDevices.getUserMedia({ audio: true }).then(s => {
-            stream = s;
-            btn.disabled = false;
-            btn.classList.add('ready');
-            btn.innerText = "PULSAR PARA HABLAR";
-
+            stream = s; btn.disabled = false; btn.classList.add('ready'); btn.innerText = "PULSAR PARA HABLAR";
             const startPTT = (e) => {
                 if(e.cancelable) e.preventDefault();
                 if(btn.disabled || btn.classList.contains('active')) return;
-                audioCtx.resume();
-                btn.classList.add('active');
+                audioCtx.resume(); btn.classList.add('active');
                 document.getElementById('status-led').classList.add('led-tx');
                 socket.emit('request-mic');
                 mediaRecorder = new MediaRecorder(stream);
