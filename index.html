@@ -7,48 +7,50 @@
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         :root { --neon: #00ff41; --sos: #ff3131; --ptt: #ff8c00; --rx: #0088ff; --bg: #050508; }
-        body { margin: 0; background: var(--bg); color: white; font-family: 'Courier New', monospace; display: flex; justify-content: center; height: 100vh; overflow: hidden; }
+        body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; display: flex; justify-content: center; height: 100vh; height: -webkit-fill-available; overflow: hidden; }
         
-        .glass-container { width: 95%; max-width: 450px; height: 98vh; background: rgba(20,20,25,0.9); border-radius: 40px; display: flex; flex-direction: column; padding: 20px; box-sizing: border-box; border: 2px solid #222; margin-top: 5px; position: relative; }
+        .glass-container { width: 100%; max-width: 450px; height: 100vh; display: flex; flex-direction: column; padding: 15px; box-sizing: border-box; background: rgba(10,10,15,1); }
         
-        header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid #333; margin-bottom: 10px; }
-        
-        /* LED INDICADOR */
-        #status-led { width: 12px; height: 12px; border-radius: 50%; background: var(--neon); box-shadow: 0 0 10px var(--neon); transition: 0.3s; }
-        .led-tx { background: var(--sos) !important; box-shadow: 0 0 15px var(--sos) !important; }
-        .led-rx { background: var(--rx) !important; box-shadow: 0 0 15px var(--rx) !important; }
+        header { display: flex; justify-content: space-between; align-items: center; padding: 10px 5px; border-bottom: 1px solid #222; font-size: 12px; }
+        #status-led { width: 12px; height: 12px; border-radius: 50%; background: #333; transition: 0.3s; }
+        .led-tx { background: var(--sos) !important; box-shadow: 0 0 10px var(--sos); }
+        .led-rx { background: var(--rx) !important; box-shadow: 0 0 10px var(--rx); }
 
-        /* PTT REDISEÑADO */
-        .ptt-section { padding: 10px 0; }
+        .ptt-section { padding: 10px 0; flex-shrink: 0; }
         #talk-btn { 
-            width: 100%; padding: 70px 0; border-radius: 35px; border: 4px solid #333; 
-            background: #1a1a1a; color: #555; font-weight: 900; font-size: 26px; 
-            touch-action: none; cursor: pointer; transition: all 0.1s;
+            width: 100%; padding: 50px 0; border-radius: 25px; border: 3px solid #333; 
+            background: #111; color: #444; font-weight: 900; font-size: 22px; 
+            touch-action: none; cursor: pointer; transition: 0.1s;
         }
-        #talk-btn.ready { background: var(--ptt); color: black; border-color: #ffb300; }
-        #talk-btn.active { background: var(--sos); color: white; transform: scale(0.96); border-color: #b30000; }
+        #talk-btn.ready { background: var(--ptt); color: black; border-color: #ff8c00; }
+        #talk-btn.active { background: var(--sos); color: white; transform: scale(0.97); }
 
-        .viz-box { height: 70px; background: #000; border-radius: 20px; border: 1px solid #333; margin: 10px 0; overflow: hidden; position: relative; }
+        .viz-box { height: 60px; background: #000; border-radius: 15px; border: 1px solid #222; margin: 10px 0; overflow: hidden; }
         
-        #chat { flex: 1; overflow-y: auto; margin-bottom: 15px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 15px; }
-        .msg { background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 12px; margin-bottom: 8px; font-size: 13px; border-left: 3px solid var(--neon); animation: fadeIn 0.3s; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        #chat { flex: 1; overflow-y: auto; margin-bottom: 10px; padding: 5px; border-bottom: 1px solid #111; }
+        .msg { background: rgba(255,255,255,0.03); padding: 8px; border-radius: 10px; margin-bottom: 6px; font-size: 13px; border-left: 2px solid var(--neon); }
+        .msg small { color: #555; float: right; }
 
-        #msg-in { background: #000; border: 1px solid #333; color: var(--neon); padding: 15px; border-radius: 15px; outline: none; flex: 1; }
+        /* AREA DE INPUT POSICIONADA PARA MÓVILES */
+        .input-area { display: flex; gap: 8px; padding: 10px 0; background: var(--bg); margin-bottom: 5px; }
+        #msg-in { 
+            background: #000; border: 1px solid #333; color: white; padding: 12px; 
+            border-radius: 12px; outline: none; flex: 1; font-size: 16px; /* 16px evita zoom en iOS */
+        }
 
         #auth-overlay { position: fixed; inset: 0; background: #000; display: flex; justify-content: center; align-items: center; z-index: 1000; }
-        .card { background: #0a0a0a; padding: 30px; border-radius: 30px; border: 1px solid var(--neon); width: 85%; max-width: 350px; }
+        .card { background: #0a0a0a; padding: 25px; border-radius: 25px; border: 1px solid var(--neon); width: 80%; }
     </style>
 </head>
 <body>
 
 <div id="auth-overlay">
     <form class="card" onsubmit="event.preventDefault(); startApp();">
-        <h2 style="color: var(--neon); letter-spacing: 2px;">SYSTEM AUTH</h2>
-        <input type="text" id="nick-in" placeholder="OPERADOR" required>
-        <input type="text" id="room-in" placeholder="FRECUENCIA/CANAL" required>
-        <input type="password" id="pass-in" placeholder="PASSWORD" required>
-        <button type="submit" style="width:100%; padding:15px; background:var(--neon); border:none; border-radius:15px; font-weight:bold; cursor:pointer; margin-top:10px;">ESTABLECER ENLACE</button>
+        <h2 style="color: var(--neon); font-size: 18px; text-align: center;">SYSTEM AUTH</h2>
+        <input type="text" id="nick-in" placeholder="USUARIO" required style="width:100%; box-sizing:border-box;">
+        <input type="text" id="room-in" placeholder="CANAL" required style="width:100%; box-sizing:border-box;">
+        <input type="password" id="pass-in" placeholder="CLAVE" required style="width:100%; box-sizing:border-box;">
+        <button type="submit" style="width:100%; padding:15px; background:var(--neon); border:none; border-radius:12px; font-weight:bold; margin-top:10px;">CONECTAR</button>
     </form>
 </div>
 
@@ -60,23 +62,27 @@
     </header>
 
     <div class="ptt-section">
-        <button id="talk-btn" disabled>ESPERANDO MIC...</button>
+        <button id="talk-btn" disabled>ESPERANDO...</button>
     </div>
 
     <div class="viz-box"><canvas id="visualizer"></canvas></div>
 
     <div id="chat"></div>
 
-    <div style="display:flex; gap:10px; align-items: center;">
-        <input type="text" id="msg-in" placeholder="Enviar texto..." onkeydown="if(event.key==='Enter') sendMsg()">
-        <button onclick="sendMsg()" style="background:var(--neon); border:none; border-radius:12px; height:50px; width:50px; font-weight:bold; cursor:pointer;">></button>
+    <div class="input-area">
+        <input type="text" id="msg-in" placeholder="Escribe aquí..." onkeydown="if(event.key==='Enter') sendMsg()">
+        <button onclick="sendMsg()" style="background:var(--neon); border:none; border-radius:10px; width:50px; font-weight:bold;">></button>
     </div>
 </div>
 
 <script>
-    // URL del Tunel Cloudflare
-    const socket = io("https://strict-miami-band-alan.trycloudflare.com", { transports: ['websocket'] });
-    let audioCtx, mainGain, analyser, dataArray, cryptoKey, mediaRecorder, stream, myNick, btn;
+    // CAMBIA ESTA URL CADA VEZ QUE INICIES EL TÚNEL
+    const socket = io("https://moves-mobiles-lamb-formatting.trycloudflare.com", { 
+        transports: ['polling', 'websocket'], // Polling primero asegura conexión en redes inestables
+        upgrade: true 
+    });
+
+    let audioCtx, mainGain, analyser, dataArray, cryptoKey, mediaRecorder, stream, myNick, btn, startLat;
 
     async function deriveKey(p) {
         const enc = new TextEncoder();
@@ -84,24 +90,22 @@
         return crypto.subtle.deriveKey({ name: "PBKDF2", salt: enc.encode("radio-v16.7"), iterations: 100000, hash: "SHA-256" }, bk, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
     }
 
-    // SONIDO ROGER BEEP
     function playRogerBeep() {
+        if(!audioCtx) return;
         const osc = audioCtx.createOscillator();
         const g = audioCtx.createGain();
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, audioCtx.currentTime); 
-        osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.1);
-        g.gain.setValueAtTime(0.1, audioCtx.currentTime);
-        g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+        osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+        g.gain.setValueAtTime(0.05, audioCtx.currentTime);
         osc.connect(g); g.connect(audioCtx.destination);
-        osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.1);
     }
 
     async function startApp() {
         btn = document.getElementById('talk-btn');
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         mainGain = audioCtx.createGain(); mainGain.connect(audioCtx.destination);
-        analyser = audioCtx.createAnalyser(); analyser.fftSize = 256;
+        analyser = audioCtx.createAnalyser(); analyser.fftSize = 128;
         dataArray = new Uint8Array(analyser.frequencyBinCount);
         
         myNick = document.getElementById('nick-in').value;
@@ -111,8 +115,17 @@
         
         socket.on('joined-success', () => { 
             document.getElementById('auth-overlay').style.display = 'none'; 
-            initMic(); draw(); 
+            initMic(); 
+            initExtra(); 
         });
+    }
+
+    function initExtra() {
+        setInterval(() => { startLat = Date.now(); socket.emit('ping-latency'); }, 3000);
+        socket.on('pong-latency', () => { 
+            document.getElementById('latency-val').innerText = `LAT: ${Date.now() - startLat}ms`; 
+        });
+        draw();
     }
 
     function initMic() {
@@ -125,13 +138,12 @@
             const startPTT = (e) => {
                 if(e.cancelable) e.preventDefault();
                 if(btn.disabled || btn.classList.contains('active')) return;
-                
                 audioCtx.resume();
                 btn.classList.add('active');
                 document.getElementById('status-led').classList.add('led-tx');
                 socket.emit('request-mic');
                 
-                mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                mediaRecorder = new MediaRecorder(stream);
                 let chunks = [];
                 mediaRecorder.ondataavailable = ev => chunks.push(ev.data);
                 mediaRecorder.onstop = () => {
@@ -142,7 +154,7 @@
                         const iv = crypto.getRandomValues(new Uint8Array(12));
                         const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, cryptoKey, reader.result);
                         socket.emit('audio-chunk', { iv: Array.from(iv), ciphertext: Array.from(new Uint8Array(ct)) });
-                        playRogerBeep(); // Beep local al terminar
+                        playRogerBeep();
                     };
                 };
                 mediaRecorder.start();
@@ -175,9 +187,9 @@
             audio.onended = () => { 
                 URL.revokeObjectURL(url); 
                 document.getElementById('status-led').classList.remove('led-rx');
-                playRogerBeep(); // Beep al recibir final de otros
+                playRogerBeep();
             };
-        } catch(e) { console.error("RX Error"); }
+        } catch(e) { console.error("RX Fail"); }
     });
 
     socket.on('channel-busy', u => { if(u !== myNick) { btn.disabled = true; btn.innerText = "TX: " + u; btn.classList.remove('ready'); } });
@@ -187,7 +199,7 @@
         const div = document.createElement('div'); div.className = 'msg';
         div.innerHTML = `<small>${d.time}</small><b>${d.user}:</b> ${d.text}`;
         const c = document.getElementById('chat'); c.appendChild(div);
-        c.scrollTo({ top: c.scrollHeight, behavior: 'smooth' });
+        c.scrollTop = c.scrollHeight;
     });
 
     socket.on('user-list', list => { document.getElementById('user-count').innerText = `USR: ${list.length}`; });
@@ -201,9 +213,10 @@
         requestAnimationFrame(draw);
         const c = document.getElementById('visualizer'); const ctx = c.getContext('2d');
         c.width = c.offsetWidth; c.height = c.offsetHeight;
+        ctx.clearRect(0,0,c.width,c.height);
         analyser.getByteTimeDomainData(dataArray);
         ctx.strokeStyle = btn.classList.contains('active') ? '#ff3131' : '#00ff41';
-        ctx.lineWidth = 3; ctx.beginPath();
+        ctx.lineWidth = 2; ctx.beginPath();
         let sw = c.width/dataArray.length;
         for(let i=0; i<dataArray.length; i++){
             let y = (dataArray[i]/128)*c.height/2;
